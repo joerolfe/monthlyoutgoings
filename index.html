@@ -106,6 +106,14 @@ li input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:s
 .row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:16px}
 .row .amt s{display:block;font-size:12px;color:var(--faint)}
 .row .chev{flex:none;color:var(--faint)}
+/* swipe-left actions on bills */
+li.sw{padding-left:0;overflow:hidden}
+li.sw::before{z-index:2}
+.slide{flex:1;min-width:0;display:flex;align-items:center;gap:14px;padding-left:16px;align-self:stretch;background:var(--surface);position:relative;z-index:1;transition:transform .22s cubic-bezier(.2,.8,.2,1);touch-action:pan-y}
+.slide.drag{transition:none}
+.acts{position:absolute;top:0;right:0;bottom:0;display:flex}
+.acts button{width:74px;border:0;color:#fff;font-size:15px;font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+.acts .a-edit{background:#8a9594} .acts .a-del{background:#d0453a}
 li.paid .name,li.paid .amt{color:var(--faint)}
 li.paid .name{text-decoration:line-through}
 .empty{justify-content:center;color:var(--muted);text-align:center;padding:18px 16px;font-size:15px}
@@ -628,8 +636,16 @@ li:has(>.row:active) .row{background:none}
     txt.appendChild(el('span','name',it.name));if(m)txt.appendChild(el('span','meta '+m.c,m.t));
     var amt=el('span','amt',gbp.format(it.paid?paidValue(it):it.amount));
     if(it.paid&&it.paidAmount!=null&&Math.abs(it.paidAmount-it.amount)>=0.01)amt.appendChild(el('s',null,gbp.format(it.amount)));
-    row.append(txt,amt);row.onclick=function(){openEdit(it)};
-    li.append(tick,row);return li;
+    row.append(txt,amt);row.insertAdjacentHTML('beforeend',CHEV);
+    row.onclick=function(){if(openSwipe){closeSwipe();return}openEdit(it)};
+    // Swipe left to reveal Edit / Delete
+    li.classList.add('sw');
+    var slide=el('div','slide');slide.append(tick,row);
+    var acts=el('div','acts'),be=el('button','a-edit','Edit'),bd=el('button','a-del','Delete');be.type=bd.type='button';
+    be.onclick=function(){closeSwipe();openEdit(it)};
+    bd.onclick=function(){closeSwipe();deleteItem(it)};
+    acts.append(be,bd);li.append(acts,slide);swipeable(slide);
+    return li;
   }
   function txRow(t,meta,onclick,extra){
     var li=el('li','plain-li'),row=el('button','row');row.type='button';
@@ -906,11 +922,36 @@ li:has(>.row:active) .row{background:none}
   };
   $('fCancel').onclick=function(){pendingLink=null;$('editSheet').close()};
   $('fUnlink').onclick=function(){if(!editingItem)return;state.ignoredTx.push(editingItem.txId);clearPaid(editingItem);$('fLinked').hidden=true;save();render()};
-  $('fDelete').onclick=function(){
-    var it=editingItem;if(!it)return;
-    var idx=state.items.indexOf(it);state.items.splice(idx,1);
-    $('editSheet').close();haptic();edited();toast('Deleted '+it.name,{item:it,index:idx});
-  };
+  function deleteItem(it){
+    var idx=state.items.indexOf(it);if(idx<0)return;state.items.splice(idx,1);
+    haptic();edited();toast('Deleted '+it.name,{item:it,index:idx});
+  }
+  $('fDelete').onclick=function(){var it=editingItem;if(!it)return;$('editSheet').close();deleteItem(it)};
+
+  /* swipe rows */
+  var openSwipe=null,OPEN_X=-148;
+  function closeSwipe(){if(openSwipe){openSwipe.style.transform='';openSwipe=null}}
+  function swipeable(sl){
+    var x0,y0,dx,dir;
+    sl.addEventListener('touchstart',function(e){
+      if(openSwipe&&openSwipe!==sl)closeSwipe();
+      x0=e.touches[0].clientX;y0=e.touches[0].clientY;dx=0;dir=null;
+    },{passive:true});
+    sl.addEventListener('touchmove',function(e){
+      var mx=e.touches[0].clientX-x0,my=e.touches[0].clientY-y0;
+      if(!dir&&(Math.abs(mx)>8||Math.abs(my)>8))dir=Math.abs(mx)>Math.abs(my)?'h':'v';
+      if(dir!=='h')return;
+      if(e.cancelable)e.preventDefault();
+      var base=openSwipe===sl?OPEN_X:0;dx=Math.min(0,Math.max(OPEN_X-40,base+mx));
+      sl.classList.add('drag');sl.style.transform='translateX('+dx+'px)';
+    },{passive:false});
+    sl.addEventListener('touchend',function(){
+      sl.classList.remove('drag');if(dir!=='h')return;
+      if(dx<OPEN_X/2){sl.style.transform='translateX('+OPEN_X+'px)';if(openSwipe!==sl)haptic();openSwipe=sl}
+      else{sl.style.transform='';if(openSwipe===sl)openSwipe=null}
+    });
+  }
+  document.addEventListener('touchstart',function(e){if(openSwipe&&!openSwipe.parentNode.contains(e.target))closeSwipe()},{passive:true});
   $('addBtn').onclick=function(){pendingLink=null;openEdit(null)};
 
   // Link a Monzo payment to a bill (teaches the bill a match word)
@@ -1002,7 +1043,17 @@ li:has(>.row:active) .row{background:none}
     sb.auth.getSession().then(function(r){setUser(r.data.session&&r.data.session.user)});
     sb.auth.onAuthStateChange(function(_e,session){setUser(session&&session.user)});
   }
-  if('serviceWorker' in navigator&&location.protocol!=='file:')navigator.serviceWorker.register('sw.js').catch(function(){});
+  if('serviceWorker' in navigator&&location.protocol!=='file:'){
+    // When a new version finishes downloading, switch to it straight away (but never mid-edit).
+    var hadController=!!navigator.serviceWorker.controller,reloadDue=false;
+    var tryReload=function(){if(reloadDue&&!anySheetOpen()&&!editing()){reloadDue=false;location.reload()}};
+    navigator.serviceWorker.addEventListener('controllerchange',function(){if(hadController){reloadDue=true;tryReload()}});
+    ['editSheet','linkSheet','setSheet'].forEach(function(id){$(id).addEventListener('close',function(){setTimeout(tryReload,300)})});
+    document.addEventListener('visibilitychange',tryReload);
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')reg.update().catch(function(){})});
+    }).catch(function(){});
+  }
 })();
 </script>
 </body>
