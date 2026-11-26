@@ -77,3 +77,6 @@ curl -X DELETE https://api.monzo.com/webhooks/<webhook_id> -H "Authorization: Be
 ### Limitations
 - Only transactions made after you register the webhook are imported.
 - Monzo sends nothing when a payment settles, so `settled` is usually empty. A few amounts, such as foreign or pre-authorised payments, can change at settlement and will keep their original value here.
+
+### Importing past Monzo payments
+The webhook only sends new payments. To bring in your history for the Spending charts, run `scripts/monzo-import.mjs` on your Mac. The instructions are at the top of the file. Run it within 5 minutes of approving the login in the Monzo app; after that, Monzo only allows the last 90 days. It's safe to run more than once.
