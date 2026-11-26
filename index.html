@@ -9,19 +9,21 @@
 <meta name="apple-mobile-web-app-title" content="Outgoings">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="format-detection" content="telephone=no">
-<meta name="theme-color" content="#f2f4f5" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0d1514" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f2f3f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1110" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="icon" href="icon-180.png">
 <style>
-/* Layout: one column sized for a 402pt-wide iPhone 17. Sticky bar under the Dynamic Island,
-   "still to pay" card, Bills / Calendar switch, then the chosen view. Bills tick themselves off
-   when a matching Monzo payment lands. Edit + link happen in bottom sheets. */
+/* Layout: native-feeling iPhone app. Slim top bar under the Dynamic Island, three views
+   (Bills, Calendar, Spending) switched from a bottom tab bar above the home indicator.
+   Borderless grouped cards; secondary lines only when they say something. */
 :root{
-  --bg:#f2f4f5; --surface:#ffffff; --fg:#14201f; --muted:#5d6e6c; --line:#dde3e3;
-  --accent:#0d7a6b; --accent-soft:#d9efeb; --warn:#a85a00; --warn-soft:#fbead2; --bad:#c2410c;
-  --bar:rgba(242,244,245,.82);
+  --bg:#f2f3f5; --surface:#ffffff; --fg:#121a19; --muted:#6b7776; --faint:#9aa5a4; --line:#e6e9ea;
+  --accent:#0d7a6b; --accent-soft:#dcefeb; --bad:#c2410c; --bad-soft:#fdeee6;
+  --bar:rgba(242,243,245,.85);
+  /* chart series: validated categorical slots 1-3 (fast food, Amazon, going out) */
+  --s1:#257de0; --s2:#f47230; --s3:#00b894; --grid:#e9ecee;
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',sans-serif;
   --mono:ui-monospace,'SF Mono',Menlo,monospace;
   --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
@@ -29,146 +31,185 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0d1514; --surface:#172221; --fg:#e6efee; --muted:#93a8a5; --line:#273837;
-  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14; --bad:#ff8a5c;
-  --bar:rgba(13,21,20,.82); color-scheme:dark}}
+  --bg:#0b1110; --surface:#162020; --fg:#e8efee; --muted:#93a3a1; --faint:#5f6f6d; --line:#24302f;
+  --accent:#3fc2ad; --accent-soft:#163430; --bad:#ff8a5c; --bad-soft:#3a2016;
+  --bar:rgba(11,17,16,.85);
+  --s1:#338ced; --s2:#e76624; --s3:#00a888; --grid:#24302f; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0d1514; --surface:#172221; --fg:#e6efee; --muted:#93a8a5; --line:#273837;
-  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14; --bad:#ff8a5c;
-  --bar:rgba(13,21,20,.82); color-scheme:dark}
+  --bg:#0b1110; --surface:#162020; --fg:#e8efee; --muted:#93a3a1; --faint:#5f6f6d; --line:#24302f;
+  --accent:#3fc2ad; --accent-soft:#163430; --bad:#ff8a5c; --bad-soft:#3a2016;
+  --bar:rgba(11,17,16,.85);
+  --s1:#338ced; --s2:#e76624; --s3:#00a888; --grid:#24302f; color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 var(--font);touch-action:manipulation;
-  padding:0 max(16px,var(--sar)) calc(32px + var(--sab)) max(16px,var(--sal))}
-main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
-.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  padding:0 max(16px,var(--sar)) calc(88px + var(--sab)) max(16px,var(--sal))}
+main{max-width:560px;margin:0 auto}
+.view{display:flex;flex-direction:column;gap:20px;padding-top:8px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 [hidden]{display:none!important}
 button{font:inherit;color:inherit}
+svg{display:block}
 
-/* Sticky top bar */
+/* Top bar */
 .top{position:sticky;top:0;z-index:5;margin:0 calc(-1 * max(16px,var(--sar))) 0 calc(-1 * max(16px,var(--sal)));
-  padding:calc(var(--sat) + 10px) max(16px,var(--sar)) 10px max(16px,var(--sal));
-  background:var(--bar);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);
-  border-bottom:1px solid transparent;transition:border-color .2s}
+  padding:calc(var(--sat) + 8px) max(16px,var(--sar)) 8px max(16px,var(--sal));
+  background:var(--bar);-webkit-backdrop-filter:saturate(1.6) blur(20px);backdrop-filter:saturate(1.6) blur(20px);
+  border-bottom:.5px solid transparent;transition:border-color .2s}
 .top.scrolled{border-bottom-color:var(--line)}
-.top-in{max-width:560px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:12px}
-h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
-.sub{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
-.dot.ok{background:var(--accent)} .dot.busy{background:var(--warn)} .dot.bad{background:#d0453a}
-.mini{font-size:17px;font-weight:600;opacity:0;transform:translateY(4px);transition:opacity .2s,transform .2s}
-.top.scrolled .mini{opacity:1;transform:none}
+.top-in{max-width:560px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:44px}
+h1{font-size:28px;font-weight:700;margin:0;letter-spacing:-.02em;line-height:1.1}
+.sub{display:flex;align-items:center;gap:6px;color:var(--muted);font-size:13px;margin-top:2px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--faint)}
+.dot.ok{background:var(--accent)} .dot.busy{background:#d9a03a} .dot.bad{background:#d0453a}
+.top-r{display:flex;align-items:center;gap:6px}
+.mini{font-size:17px;font-weight:600;opacity:0;transition:opacity .2s}
+.top.scrolled .mini{opacity:1}
+.icon-btn{width:44px;height:44px;border:0;background:none;border-radius:50%;display:grid;place-content:center;color:var(--muted);cursor:pointer}
+.icon-btn:active{background:var(--line)}
 
-.card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px}
-.label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
-.big{font-size:clamp(40px,13vw,58px);font-weight:600;line-height:1.1;margin:4px 0 14px;letter-spacing:-.02em}
-.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden}
-.bar>i{display:block;height:100%;background:var(--accent);width:0;transition:width .3s}
-.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
-.stat b{display:block;font-size:17px;font-weight:600;overflow-wrap:anywhere}
-.stat.neg b{color:var(--warn)}
-.next{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--muted)}
-.next b{color:var(--fg);font-weight:600}
-.income{display:flex;align-items:center;gap:8px;margin-top:12px}
-.income label{flex:none}
-input,select{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;min-height:44px;width:100%}
-input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.income input{flex:1;font-family:var(--mono);font-weight:600}
+/* Cards & lists */
+.card{background:var(--surface);border-radius:18px;padding:18px}
+.label{font-size:13px;color:var(--muted);font-weight:500}
+.section-title{font-size:20px;font-weight:700;margin:0;letter-spacing:-.01em}
+.section-head{display:flex;justify-content:space-between;align-items:baseline;margin:4px 2px -8px}
+.section-head span{font-size:15px;color:var(--muted)}
+.big{font-size:clamp(42px,13vw,56px);font-weight:600;line-height:1.05;margin:2px 0 14px}
+.bar{height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--accent);width:0;border-radius:3px;transition:width .4s}
+.hero-foot{display:flex;justify-content:space-between;gap:12px;margin-top:10px;font-size:15px;color:var(--muted)}
+.hero-foot b{color:var(--fg);font-weight:600}
+.next{display:flex;align-items:center;gap:12px;margin-top:16px;padding:12px 14px;border-radius:14px;background:var(--bg);font-size:15px}
+.next .txt{flex:1;min-width:0}
+.next b{display:block;font-weight:600;font-size:16px}
+.next span{color:var(--muted)}
+.next .late{color:var(--bad)}
+.pill{flex:none;font-size:13px;font-weight:600;color:var(--bad);background:var(--bad-soft);border-radius:999px;padding:4px 10px}
 
-/* Bills / Calendar switch */
-.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--line);border-radius:12px;padding:3px;gap:3px}
-.seg button{border:0;background:none;border-radius:9px;min-height:38px;font-size:15px;font-weight:600;color:var(--muted);cursor:pointer}
-.seg button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
-
-.note{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 14px;font-size:15px}
-ul{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-li{display:flex;align-items:center;gap:12px;padding:0 14px;min-height:58px;border-top:1px solid var(--line)}
-li:first-child{border-top:0}
-li.cat{background:var(--bg);min-height:36px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);justify-content:space-between}
-li input[type=checkbox]{appearance:none;-webkit-appearance:none;width:28px;height:28px;min-height:0;flex:none;border:2px solid var(--muted);border-radius:8px;padding:0;margin:0;background:transparent;cursor:pointer;display:grid;place-content:center;transition:background .15s,border-color .15s}
+ul{list-style:none;margin:0;padding:0;background:var(--surface);border-radius:18px;overflow:hidden}
+li{display:flex;align-items:center;gap:14px;padding-left:16px;min-height:56px;position:relative}
+li+li::before{content:"";position:absolute;top:0;right:0;left:58px;border-top:.5px solid var(--line)}
+li.cat{min-height:40px;padding-right:16px;justify-content:space-between;font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+li.cat::before{left:16px!important}
+li.cat+li::before{display:none}
+li input[type=checkbox]{appearance:none;-webkit-appearance:none;width:26px;height:26px;flex:none;border:2px solid var(--faint);border-radius:50%;padding:0;margin:0;background:transparent;cursor:pointer;display:grid;place-content:center;transition:background .15s,border-color .15s}
 li input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
-li input[type=checkbox]:checked::after{content:"";width:7px;height:13px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
-.row{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;padding:8px 0;text-align:left;cursor:pointer;align-self:stretch}
+li input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.2px 2.2px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.row{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;padding:10px 16px 10px 0;text-align:left;cursor:pointer;align-self:stretch}
 .row .txt{flex:1;min-width:0}
 .row .name{display:block;overflow-wrap:anywhere}
-.row .meta{display:block;font-size:13px;color:var(--muted)}
-.row .meta.late{color:var(--bad)}
-.row .meta.monzo{color:var(--accent)}
-.row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
-.row .amt s{display:block;font-size:12px;color:var(--muted)}
-li.paid .name{text-decoration:line-through;color:var(--muted)}
-li.paid .amt{color:var(--muted)}
-.empty{justify-content:center;color:var(--muted);text-align:center;padding:16px 14px}
+.row .meta{display:block;font-size:13px;color:var(--muted);margin-top:1px}
+.row .meta.late{color:var(--bad)} .row .meta.monzo{color:var(--accent)}
+.row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:16px}
+.row .amt s{display:block;font-size:12px;color:var(--faint)}
+.row .chev{flex:none;color:var(--faint)}
+li.paid .name,li.paid .amt{color:var(--faint)}
+li.paid .name{text-decoration:line-through}
+.empty{justify-content:center;color:var(--muted);text-align:center;padding:18px 16px;font-size:15px}
+.plain li{padding-left:16px} .plain li+li::before{left:16px}
 
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-button.primary,.ghost{font-size:17px;font-weight:600;border-radius:12px;cursor:pointer;min-height:48px;padding:0 16px}
+button.primary,.ghost{font-size:17px;font-weight:600;border-radius:14px;cursor:pointer;min-height:50px;padding:0 16px}
 button.primary{background:var(--accent);color:#fff;border:0}
 :root[data-theme="dark"] button.primary{color:var(--bg)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:var(--bg)}}
-button.primary:active{filter:brightness(.92)}
-button.primary:disabled{opacity:.6}
-.ghost{background:none;border:1px solid var(--line);color:var(--muted)}
-.ghost:active{color:var(--fg);border-color:var(--muted)}
+button.primary:active{filter:brightness(.92)} button.primary:disabled{opacity:.6}
+.ghost{background:var(--surface);border:0;color:var(--fg)}
+.ghost:active{background:var(--line)}
 .ghost.danger{color:var(--bad)}
+.add-row{display:flex;align-items:center;justify-content:center;gap:8px;color:var(--accent)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+input,select{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:0;border-radius:12px;padding:11px 14px;min-width:0;min-height:46px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 
 /* Calendar */
-.cal-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
-.cal-head b{font-size:17px}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
-.cal .wd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px}
-.cal button{aspect-ratio:1/1.05;border:0;background:none;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;cursor:pointer;font-size:15px;font-variant-numeric:tabular-nums}
-.cal button.has{background:var(--bg)}
-.cal button.today span:first-child{background:var(--fg);color:var(--bg);border-radius:50%;width:24px;height:24px;display:grid;place-content:center;margin-top:-3px}
-.cal button.sel{outline:2px solid var(--accent);outline-offset:-2px}
-.cal button.past:not(.today){color:var(--muted)}
-.dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;max-width:30px}
-.dots i{width:6px;height:6px;border-radius:50%;background:var(--muted)}
-.dots i.paid{background:var(--accent)} .dots i.late{background:var(--bad)} .dots i.tx{background:transparent;border:1.5px solid var(--muted);width:6px;height:6px}
-.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
-.legend span{display:flex;align-items:center;gap:5px}
-.day-title{font-size:15px;font-weight:600;margin:0 0 8px}
-.daylist li{min-height:50px}
-.txrow .row .amt{color:var(--fg)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
+.cal .wd{font-size:12px;color:var(--faint);font-weight:600;padding-bottom:6px}
+.cal button{aspect-ratio:1/1.1;border:0;background:none;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;cursor:pointer;font-size:16px;font-variant-numeric:tabular-nums}
+.cal button span:first-child{width:28px;height:28px;display:grid;place-content:center;border-radius:50%}
+.cal button.today span:first-child{background:var(--accent);color:#fff;font-weight:600}
+.cal button.sel:not(.today) span:first-child{background:var(--fg);color:var(--bg);font-weight:600}
+.cal button.past:not(.today):not(.sel){color:var(--faint)}
+.dots{display:flex;gap:3px;justify-content:center;height:6px}
+.dots i{width:5px;height:5px;border-radius:50%;background:var(--faint)}
+.dots i.paid{background:var(--accent)} .dots i.late{background:var(--bad)} .dots i.tx{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:8px;height:8px;border-radius:50%;flex:none}
 
-/* Monzo card */
-.monzo .stats{margin-top:10px}
-.mlist{border:0;border-radius:0;background:none;margin-top:12px}
-.mlist li{min-height:50px;padding:0}
-.mlist li:first-child{border-top:1px solid var(--line)}
-.mlist .muted{color:var(--muted);font-size:15px;justify-content:flex-start}
-.hint{font-size:13px;color:var(--muted);margin:12px 0 0}
-details{margin-top:12px}
-summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:15px;min-height:44px;display:flex;align-items:center}
-.catrow{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+/* Spending */
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tile{background:var(--surface);border-radius:18px;padding:14px 16px}
+.tile b{display:block;font-size:22px;font-weight:600;margin-top:2px}
+.bk{display:grid;gap:16px;margin-top:14px}
+.bk-row .top-line{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.bk-row .nm{display:flex;align-items:center;gap:8px;font-weight:600}
+.bk-row .nm i{width:10px;height:10px;border-radius:3px;flex:none}
+.bk-row .val{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:17px}
+.bk-row .track{height:10px;margin:8px 0 4px;border-radius:0 4px 4px 0;overflow:visible}
+.bk-row .track i{display:block;height:100%;border-radius:0 4px 4px 0;min-width:2px;transition:width .4s}
+.bk-row .delta{font-size:13px;color:var(--muted)}
+.chart-wrap{position:relative;margin-top:12px}
+.chart-wrap svg text{font:12px var(--font);fill:var(--muted)}
+.chart-wrap .grid{stroke:var(--grid);stroke-width:1}
+.chart-wrap .hit{fill:transparent;cursor:pointer}
+.chart-wrap .hl{fill:var(--line);opacity:.6}
+.tip{position:absolute;pointer-events:none;white-space:nowrap;background:var(--fg);color:var(--bg);border-radius:12px;padding:8px 12px;font-size:13px;min-width:150px;box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:2}
+.tip b{display:block;font-size:14px;margin-bottom:4px}
+.tip div{display:flex;justify-content:space-between;gap:14px;align-items:center}
+.tip i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:6px}
+.tip .v{font-family:var(--mono);font-variant-numeric:tabular-nums}
+details{margin-top:10px}
+summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:15px;min-height:44px;display:flex;align-items:center;list-style:none}
+summary::-webkit-details-marker{display:none}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:right;padding:7px 0;border-top:.5px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:500}
+td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+td:first-child{font-family:var(--font)}
+.note-sm{font-size:13px;color:var(--muted);margin:10px 0 0}
+.catrow{display:flex;justify-content:space-between;padding:9px 0;border-top:.5px solid var(--line);font-size:15px}
+.catrow .num{font-size:15px}
+.place .bdot{width:10px;height:10px;border-radius:3px;flex:none}
+#places li+li::before{left:40px}
 
-/* Bottom sheets */
-dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:560px;max-height:88dvh;overflow:auto;border:0;border-radius:20px 20px 0 0;
-  background:var(--surface);color:var(--fg);padding:8px max(18px,var(--sal)) calc(18px + var(--sab));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+/* Tab bar */
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;justify-content:center;
+  padding:6px max(16px,var(--sar)) calc(6px + var(--sab)) max(16px,var(--sal));
+  background:var(--bar);-webkit-backdrop-filter:saturate(1.6) blur(20px);backdrop-filter:saturate(1.6) blur(20px);border-top:.5px solid var(--line)}
+.tabbar-in{display:grid;grid-template-columns:repeat(3,1fr);width:100%;max-width:560px}
+.tabbar button{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:50px;justify-content:center;font-size:11px;font-weight:600;color:var(--faint);cursor:pointer;position:relative}
+.tabbar button[aria-selected="true"]{color:var(--accent)}
+.tabbar .badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;display:grid;place-content:center;padding:0 5px}
+
+/* Sheets */
+dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:560px;max-height:90dvh;overflow:auto;border:0;border-radius:22px 22px 0 0;
+  background:var(--bg);color:var(--fg);padding:8px max(18px,var(--sal)) calc(18px + var(--sab));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
 dialog.sheet::backdrop{background:rgba(0,0,0,.4)}
-dialog.sheet[open]{animation:up .22s ease-out}
-@keyframes up{from{transform:translateY(40px);opacity:.6}}
-.grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
-.sheet h2{font-size:20px;margin:0 0 14px}
-.sheet form{display:grid;gap:12px}
-.field{display:grid;gap:5px}
-.field small{color:var(--muted);font-size:13px}
+dialog.sheet[open]{animation:up .24s cubic-bezier(.2,.8,.2,1)}
+@keyframes up{from{transform:translateY(60px);opacity:.5}}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--faint);opacity:.5;margin:0 auto 14px}
+.sheet h2{font-size:22px;margin:0 0 16px;outline:none}
+.sheet form{display:grid;gap:14px}
+.field{display:grid;gap:6px}
+.field>.label{padding-left:4px}
+.field small{color:var(--muted);font-size:13px;padding-left:4px}
+.sheet input,.sheet select{background:var(--surface)}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
-.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:0 12px;min-height:34px;font-size:14px;cursor:pointer}
-.chips button:active{border-color:var(--accent);color:var(--accent)}
-.linked{background:var(--accent-soft);color:var(--fg);border-radius:12px;padding:10px 12px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
-.pick li{padding:0}
-.pick .row{padding:8px 14px}
-
-.auth h2{font-size:17px;margin:0 0 4px}
-.auth p{margin:0 0 12px;color:var(--muted);font-size:15px}
-.auth form{display:grid;gap:8px}
-.err{color:#d0453a;font-size:15px;margin:0}
-.acct{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:15px;flex-wrap:wrap}
-.acct span{overflow-wrap:anywhere}
+.chips button{border:0;background:var(--surface);border-radius:999px;padding:0 12px;min-height:34px;font-size:14px;cursor:pointer;color:var(--accent);font-weight:500}
+.linked{background:var(--accent-soft);border-radius:14px;padding:10px 14px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.hint{font-size:14px;color:var(--muted);margin:-8px 0 14px}
 .link{background:none;border:0;color:var(--accent);font-weight:600;cursor:pointer;min-height:44px;padding:0 4px}
+.set-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 16px;min-height:52px}
+.set-row input{width:130px;text-align:right;font-family:var(--mono);background:var(--bg)}
 
-.toast{position:fixed;left:50%;bottom:calc(16px + var(--sab));transform:translate(-50%,20px);opacity:0;pointer-events:none;
+.auth h2{font-size:18px;margin:0 0 4px}
+.auth p{margin:0 0 14px;color:var(--muted);font-size:15px}
+.auth form{display:grid;gap:10px}
+.err{color:#d0453a;font-size:15px;margin:0}
+
+.toast{position:fixed;left:50%;bottom:calc(76px + var(--sab));transform:translate(-50%,16px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:14px;background:var(--fg);color:var(--bg);border-radius:14px;padding:6px 6px 6px 16px;
   font-size:15px;max-width:calc(100% - 32px);transition:opacity .2s,transform .2s;z-index:10}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
@@ -179,111 +220,143 @@ dialog.sheet[open]{animation:up .22s ease-out}
 <body>
 
 <header class="top" id="top"><div class="top-in">
-  <div><h1>Outgoings</h1><div class="sub"><span id="month"></span> · <span class="dot" id="dot"></span><span id="sync">On this device</span></div></div>
-  <span class="mini num" id="mini"></span>
+  <div><h1 id="title">Bills</h1><div class="sub"><span id="month"></span> · <span class="dot" id="dot"></span><span id="sync">On this device</span></div></div>
+  <div class="top-r">
+    <span class="mini num" id="mini"></span>
+    <button class="icon-btn" id="setBtn" type="button" aria-label="Settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </div>
 </div></header>
 
 <main>
-  <section class="card auth" id="auth" hidden>
-    <h2>Sync with your other devices</h2>
-    <p>Sign in to keep this list the same on your iPhone and computer.</p>
-    <form id="authForm">
-      <input id="email" type="email" autocomplete="username" autocapitalize="off" placeholder="Email" required aria-label="Email">
-      <input id="password" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" minlength="6" required aria-label="Password">
-      <p class="err" id="authErr" hidden></p>
-      <div class="actions">
-        <button class="primary" type="submit" id="signIn">Sign in</button>
-        <button class="ghost" type="button" id="signUp">Create account</button>
-      </div>
-    </form>
-  </section>
-
-  <section class="card" id="hero" aria-live="polite">
-    <div class="label">Still to pay</div>
-    <div class="big num" id="remaining">£0.00</div>
-    <div class="bar"><i id="progress"></i></div>
-    <div class="stats">
-      <div class="stat"><span class="label">Paid</span><b class="num" id="paid">£0</b></div>
-      <div class="stat"><span class="label">Budget</span><b class="num" id="total">£0</b></div>
-      <div class="stat" id="freeStat"><span class="label">Left over</span><b class="num" id="free">£0</b></div>
-    </div>
-    <div class="next" id="next" hidden></div>
-    <div class="income"><label class="label" for="income">Income £</label><input id="income" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Optional"></div>
-  </section>
-
-  <div class="seg" role="tablist">
-    <button role="tab" id="tabBills" aria-selected="true">Bills</button>
-    <button role="tab" id="tabCal" aria-selected="false">Calendar</button>
-  </div>
-
-  <!-- Bills view -->
-  <div id="viewBills" style="display:flex;flex-direction:column;gap:16px">
-    <div class="note" id="note" hidden>These are example outgoings. Change the amounts, delete them and add your own.</div>
-    <ul id="list"></ul>
-    <div class="actions">
-      <button class="primary" id="addBtn" type="button">Add bill</button>
-      <button class="ghost" id="reset" type="button">New month</button>
-    </div>
-
-    <section class="card monzo" id="monzo" hidden>
-      <div class="label">From Monzo this month</div>
-      <div class="stats">
-        <div class="stat"><span class="label">Out</span><b class="num" id="mOut">£0</b></div>
-        <div class="stat"><span class="label">In</span><b class="num" id="mIn">£0</b></div>
-        <div class="stat" id="mNetStat"><span class="label">Net</span><b class="num" id="mNet">£0</b></div>
-      </div>
-      <p class="hint" id="mHint">Payments below didn't match a bill. Tap one to link it, and it'll tick itself off every month.</p>
-      <ul class="mlist" id="mList"></ul>
-      <details><summary>Spending by category</summary><div id="mCats"></div></details>
+  <!-- ============ BILLS ============ -->
+  <div class="view" id="viewBills">
+    <section class="card auth" id="auth" hidden>
+      <h2>Sync with your other devices</h2>
+      <p>Sign in to keep your bills the same everywhere and pull in Monzo payments.</p>
+      <form id="authForm">
+        <input id="email" type="email" autocomplete="username" autocapitalize="off" placeholder="Email" required aria-label="Email">
+        <input id="password" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" minlength="6" required aria-label="Password">
+        <p class="err" id="authErr" hidden></p>
+        <div class="actions">
+          <button class="primary" type="submit" id="signIn">Sign in</button>
+          <button class="ghost" type="button" id="signUp" style="background:var(--bg)">Create account</button>
+        </div>
+      </form>
     </section>
+
+    <section class="card" id="hero" aria-live="polite">
+      <div class="label">Still to pay this month</div>
+      <div class="big num" id="remaining">£0.00</div>
+      <div class="bar"><i id="progress"></i></div>
+      <div class="hero-foot"><span><b class="num" id="paid">£0</b> paid of <span class="num" id="total">£0</span></span><span id="freeTxt"></span></div>
+      <div class="next" id="next" hidden></div>
+    </section>
+
+    <ul id="list"></ul>
+    <button class="ghost add-row" id="addBtn" type="button">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Add bill
+    </button>
   </div>
 
-  <!-- Calendar view -->
-  <div id="viewCal" hidden style="flex-direction:column;gap:16px">
+  <!-- ============ CALENDAR ============ -->
+  <div class="view" id="viewCal" hidden>
     <section class="card">
-      <div class="cal-head"><b id="calTitle"></b><span class="label" id="calSub"></span></div>
       <div class="cal" id="cal"></div>
       <div class="legend">
-        <span><i class="dots"><i></i></i>Due</span>
-        <span><i class="dots"><i class="paid"></i></i>Paid</span>
-        <span><i class="dots"><i class="late"></i></i>Overdue</span>
-        <span><i class="dots"><i class="tx"></i></i>Monzo payment</span>
+        <span><i style="background:var(--faint)"></i>Due</span>
+        <span><i style="background:var(--accent)"></i>Paid</span>
+        <span><i style="background:var(--bad)"></i>Overdue</span>
+        <span><i style="box-shadow:inset 0 0 0 1.5px var(--faint)"></i>Monzo payment</span>
       </div>
     </section>
-    <section>
-      <p class="day-title" id="dayTitle"></p>
-      <ul class="daylist" id="dayList"></ul>
-    </section>
-    <section id="anyWrap">
-      <p class="day-title">No fixed date</p>
-      <ul class="daylist" id="anyList"></ul>
-    </section>
+    <div class="section-head"><h2 class="section-title" id="dayTitle"></h2></div>
+    <ul id="dayList"></ul>
+    <div class="section-head" id="anyHead"><h2 class="section-title">Any time</h2><span>no fixed date</span></div>
+    <ul id="anyList"></ul>
   </div>
 
-  <div class="acct" id="acct" hidden><span id="who"></span><button class="link" id="signOut" type="button">Sign out</button></div>
+  <!-- ============ SPENDING ============ -->
+  <div class="view" id="viewSpend" hidden>
+    <section class="card" id="spendOff" hidden><p class="label" style="margin:0">Sign in and connect Monzo to see your spending here.</p></section>
+    <div id="spendOn" style="display:contents">
+      <div class="tiles">
+        <div class="tile"><span class="label">Out this month</span><b class="num" id="mOut">£0</b></div>
+        <div class="tile"><span class="label">In this month</span><b class="num" id="mIn">£0</b></div>
+      </div>
+
+      <section class="card">
+        <h2 class="section-title">This month</h2>
+        <div class="bk" id="bk"></div>
+      </section>
+
+      <section class="card">
+        <h2 class="section-title">Last 6 months</h2>
+        <div class="legend" id="legend6"></div>
+        <div class="chart-wrap" id="chart6"></div>
+        <p class="note-sm" id="histNote"></p>
+        <details><summary>Show as table</summary><div id="table6"></div></details>
+      </section>
+
+      <div class="section-head" id="placesHead"><h2 class="section-title">Top places</h2><span>this month</span></div>
+      <ul id="places"></ul>
+
+      <div class="section-head" id="unHead"><h2 class="section-title">Not linked to a bill</h2></div>
+      <ul class="plain" id="unlinked"></ul>
+
+      <section class="card">
+        <details style="margin:0"><summary style="min-height:24px">All spending by Monzo category</summary><div id="mCats" style="margin-top:8px"></div></details>
+      </section>
+    </div>
+  </div>
 </main>
+
+<nav class="tabbar" role="tablist"><div class="tabbar-in">
+  <button role="tab" id="tabBills" aria-selected="true">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1 1 2-2M3.5 12l1 1 2-2M3.5 18l1 1 2-2"/></svg>Bills</button>
+  <button role="tab" id="tabCal" aria-selected="false">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>Calendar</button>
+  <button role="tab" id="tabSpend" aria-selected="false">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V12M10 20V5M15 20v-9M20 20v-5"/></svg>Spending<span class="badge" id="badge" hidden></span></button>
+</div></nav>
+
+<!-- Settings -->
+<dialog class="sheet" id="setSheet" aria-labelledby="setTitle">
+  <div class="grab"></div>
+  <h2 id="setTitle" tabindex="-1" autofocus>Settings</h2>
+  <ul class="plain">
+    <li class="set-row"><label for="income">Monthly income</label><input id="income" type="number" inputmode="decimal" min="0" step="0.01" placeholder="£ optional"></li>
+  </ul>
+  <p class="note-sm" style="margin:8px 4px 18px">Used to show how much is left after bills.</p>
+  <button class="ghost" id="reset" type="button" style="width:100%;margin-bottom:10px">Start a new month (untick everything)</button>
+  <div id="acct" hidden>
+    <p class="note-sm" style="margin:16px 4px 6px" id="who"></p>
+    <button class="ghost danger" id="signOut" type="button" style="width:100%">Sign out</button>
+  </div>
+  <button class="ghost" type="button" id="setClose" style="width:100%;margin-top:10px">Done</button>
+</dialog>
 
 <!-- Edit / add bill -->
 <dialog class="sheet" id="editSheet" aria-labelledby="editTitle">
   <div class="grab"></div>
-  <h2 id="editTitle" tabindex="-1" autofocus style="outline:none">Edit bill</h2>
+  <h2 id="editTitle" tabindex="-1" autofocus>Edit bill</h2>
   <form id="editForm" method="dialog">
     <div class="field"><label class="label" for="fName">Name</label><input id="fName" required autocapitalize="sentences"></div>
     <div class="two">
       <div class="field"><label class="label" for="fAmt">Amount £</label><input id="fAmt" class="num" type="number" inputmode="decimal" min="0" step="0.01" required></div>
-      <div class="field"><label class="label" for="fDay">Due day</label><select id="fDay"></select></div>
+      <div class="field"><label class="label" for="fDay">Due</label><select id="fDay"></select></div>
     </div>
     <div class="field"><label class="label" for="fCat">Group</label><input id="fCat" list="cats" placeholder="e.g. Car"><datalist id="cats"></datalist></div>
     <div class="field">
-      <label class="label" for="fMatch">Match Monzo payments containing</label>
+      <label class="label" for="fMatch">Tick off when a Monzo payment contains</label>
       <input id="fMatch" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. aldi, lidl">
-      <small>Separate words with commas. When a Monzo payment's name contains one, this bill ticks itself off.</small>
       <div class="chips" id="chips"></div>
     </div>
     <div class="linked" id="fLinked" hidden><span id="fLinkedTxt"></span><button class="link" type="button" id="fUnlink">Unlink</button></div>
     <div class="actions">
-      <button class="primary" type="submit" value="save">Save</button>
       <button class="ghost" type="button" id="fCancel">Cancel</button>
+      <button class="primary" type="submit" value="save">Save</button>
     </div>
     <button class="ghost danger" type="button" id="fDelete">Delete bill</button>
   </form>
@@ -292,12 +365,12 @@ dialog.sheet[open]{animation:up .22s ease-out}
 <!-- Link a Monzo payment to a bill -->
 <dialog class="sheet" id="linkSheet" aria-labelledby="linkTitle">
   <div class="grab"></div>
-  <h2 id="linkTitle" tabindex="-1" autofocus style="outline:none">Which bill is this?</h2>
-  <p class="hint" id="linkTx" style="margin:-6px 0 12px"></p>
-  <ul class="pick" id="linkList"></ul>
-  <div class="actions" style="margin-top:12px">
-    <button class="ghost" type="button" id="linkNew">New bill from this</button>
+  <h2 id="linkTitle" tabindex="-1" autofocus>Which bill is this?</h2>
+  <p class="hint" id="linkTx"></p>
+  <ul id="linkList"></ul>
+  <div class="actions" style="margin-top:14px">
     <button class="ghost" type="button" id="linkCancel">Cancel</button>
+    <button class="ghost" type="button" id="linkNew">New bill from this</button>
   </div>
 </dialog>
 
@@ -309,14 +382,30 @@ dialog.sheet[open]{animation:up .22s ease-out}
 (function(){
   var KEY='outgoings-v1', DIRTY='outgoings-dirty', TAB='outgoings-tab';
   var gbp=new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'});
+  var gbp0=new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP',maximumFractionDigits:0});
   var thisMonth=function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
   var uid=function(){return Math.random().toString(36).slice(2,9)};
   var $=function(id){return document.getElementById(id)};
   function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
-  // Starting matches/days are guesses to get going; edit any bill to change them.
+  var CHEV='<svg class="chev" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m1 1 6 6-6 6"/></svg>';
   var state={income:0,month:thisMonth(),example:false,updatedAt:0,ignoredTx:[],items:[{id:'s0',cat:'Car',name:'Car insurance',amount:144,day:0,paid:false,match:''},{id:'s1',cat:'Car',name:'Fuel 1',amount:60,day:0,paid:false,match:''},{id:'s1b',cat:'Car',name:'Fuel 2',amount:60,day:0,paid:false,match:''},{id:'s2',cat:'Car',name:'Maintenance pot',amount:30,day:0,paid:false,match:''},{id:'s3',cat:'Subscriptions',name:'Apple',amount:19,day:0,paid:false,match:''},{id:'s4',cat:'Subscriptions',name:'Amazon',amount:7.5,day:0,paid:false,match:''},{id:'s5',cat:'Subscriptions',name:'SoundCloud',amount:6,day:0,paid:false,match:''},{id:'s6',cat:'Subscriptions',name:'Claude',amount:18,day:0,paid:false,match:''},{id:'s7',cat:'Subscriptions',name:'Gym',amount:28,day:0,paid:false,match:''},{id:'s8',cat:'Subscriptions',name:'Now TV',amount:28,day:0,paid:false,match:''},{id:'s9',cat:'Subscriptions',name:'Phone',amount:20,day:0,paid:false,match:''},{id:'s10',cat:'Everything else',name:'Haircut 1',amount:16,day:0,paid:false,match:''},{id:'s10b',cat:'Everything else',name:'Haircut 2',amount:16,day:0,paid:false,match:''},{id:'s11',cat:'Everything else',name:'Toiletries',amount:10,day:0,paid:false,match:''},{id:'s12',cat:'Everything else',name:'Food shop 1',amount:50,day:0,paid:false,match:''},{id:'s12b',cat:'Everything else',name:'Food shop 2',amount:50,day:0,paid:false,match:''},{id:'s12c',cat:'Everything else',name:'Food shop 3',amount:50,day:0,paid:false,match:''},{id:'s12d',cat:'Everything else',name:'Food shop 4',amount:50,day:0,paid:false,match:''},{id:'s13',cat:'Everything else',name:'Rent 1',amount:50,day:0,paid:false,match:''},{id:'s13b',cat:'Everything else',name:'Rent 2',amount:50,day:0,paid:false,match:''}]};
-  // One-off defaults for match words on the starter bills, applied once to existing data.
   var STARTER_MATCH={s3:'apple',s4:'amazon prime,prime video',s5:'soundcloud',s6:'claude,anthropic',s8:'now tv,nowtv',s12:'aldi',s12b:'aldi',s12c:'aldi',s12d:'aldi'};
+
+  /* Spending groups for the charts. A payment lands in the first group whose rule matches. */
+  var BUCKETS=[
+    {key:'ff',label:'Fast food',color:'var(--s1)',words:['mcdonald','kfc','burger king','greggs','subway','domino','papa john','pizza hut','nando','five guys','taco bell','wendy','popeyes','wingstop','german doner','chicken','wimpy','leon ','tortilla','chipotle','deliveroo','just eat','uber eats','ubereats']},
+    {key:'amz',label:'Amazon',color:'var(--s2)',words:['amazon','amzn']},
+    {key:'out',label:'Going out',color:'var(--s3)',words:['wetherspoon','pub','tavern','inn ','brewdog','nightclub','cinema','odeon','vue ','cineworld','everyman','picturehouse','ticketmaster','see tickets','skiddle','eventbrite','dice.fm','bowling'],cats:['eating_out']}
+  ];
+  function bucketOf(t){
+    var hay=((t.merchant_name||'')+' '+(t.description||'')).toLowerCase()+' ';
+    for(var i=0;i<BUCKETS.length;i++){
+      var b=BUCKETS[i];
+      if(b.words.some(function(w){return hay.indexOf(w)>=0}))return b.key;
+      if(b.cats&&b.cats.indexOf(t.category)>=0)return b.key;
+    }
+    return null;
+  }
 
   /* ---------- local storage ---------- */
   function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
@@ -373,7 +462,8 @@ dialog.sheet[open]{animation:up .22s ease-out}
       status('Synced','ok');
     });
   }
-  function editing(){var a=document.activeElement;return (a&&a.tagName==='INPUT'&&a.form!==$('authForm'))||$('editSheet').open||$('linkSheet').open}
+  function anySheetOpen(){return $('editSheet').open||$('linkSheet').open||$('setSheet').open}
+  function editing(){var a=document.activeElement;return (a&&a.tagName==='INPUT'&&a.form!==$('authForm'))||anySheetOpen()}
   function applyRemote(data,force){
     if(editing()){pendingRemote=data;return} // don't yank the keyboard or a sheet mid-edit
     pendingRemote=null;
@@ -408,12 +498,12 @@ dialog.sheet[open]{animation:up .22s ease-out}
     var was=user&&user.id; user=u||null;
     $('auth').hidden=!configured||!!user;
     $('acct').hidden=!user; $('who').textContent=user?'Signed in as '+user.email:'';
-    if(!user){status(configured?'Not signed in':'On this device','');monzoTx=[];renderMonzo();if(channel){sb.removeChannel(channel);channel=null}return}
+    if(!user){status(configured?'Not signed in':'On this device','');monzoTx=[];histTx=[];render();if(channel){sb.removeChannel(channel);channel=null}return}
     if(was===user.id)return;
     status('Syncing…','busy');pull().then(loadMonzo);subscribe();
   }
 
-  document.addEventListener('focusout',function(){setTimeout(function(){if(pendingRemote)applyRemote(pendingRemote)},0)});
+  document.addEventListener('focusout',function(){setTimeout(function(){if(pendingRemote&&!anySheetOpen())applyRemote(pendingRemote)},0)});
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState!=='visible')return;
     if(state.month!==thisMonth()){load(state);save();render()}
@@ -422,17 +512,18 @@ dialog.sheet[open]{animation:up .22s ease-out}
   window.addEventListener('online',function(){if(user)refresh()});
   window.addEventListener('offline',function(){if(user)status('Offline','busy')});
 
-  /* ---------- Monzo: load this month, auto-tick matching bills ---------- */
-  var monzoTx=[];
+  /* ---------- Monzo: load 6 months, auto-tick this month's bills ---------- */
+  var monzoTx=[], histTx=[];  // monzoTx = this month only; null = table unavailable
   function txName(t){return t.merchant_name||t.description||'Monzo payment'}
   function words(item){return (item.match||'').split(',').map(function(w){return w.trim().toLowerCase()}).filter(Boolean)}
   function loadMonzo(){
-    if(!user||!sb){monzoTx=[];renderMonzo();return}
-    var d=new Date(),start=new Date(d.getFullYear(),d.getMonth(),1).toISOString();
+    if(!user||!sb){monzoTx=[];histTx=[];render();return}
+    var d=new Date(),monthStart=new Date(d.getFullYear(),d.getMonth(),1),histStart=new Date(d.getFullYear(),d.getMonth()-5,1);
     sb.from('monzo_transactions').select('id,amount_pence,category,merchant_name,description,created_at,merchant_id:raw->merchant->>id')
-      .gte('created_at',start).order('created_at',{ascending:true}).then(function(r){
-        if(r.error){monzoTx=null;renderMonzo();return}       // table not set up yet
-        monzoTx=r.data;
+      .gte('created_at',histStart.toISOString()).order('created_at',{ascending:true}).then(function(r){
+        if(r.error){monzoTx=null;histTx=[];render();return}
+        histTx=r.data;
+        monzoTx=histTx.filter(function(t){return new Date(t.created_at)>=monthStart});
         if(autoMatch()){save();haptic()}
         render();
       });
@@ -445,7 +536,7 @@ dialog.sheet[open]{animation:up .22s ease-out}
     (state.ignoredTx||[]).forEach(function(id){used[id]=1});
     monzoTx.forEach(function(t){
       if(t.amount_pence>=0||used[t.id])return;
-      var hay=(t.merchant_name||'')+' '+(t.description||'');hay=hay.toLowerCase();
+      var hay=((t.merchant_name||'')+' '+(t.description||'')).toLowerCase();
       var bill=state.items.find(function(i){return !i.paid&&words(i).some(function(w){return hay.indexOf(w)>=0})});
       if(bill){markPaidBy(bill,t);used[t.id]=1;changed=true}
     });
@@ -474,7 +565,7 @@ dialog.sheet[open]{animation:up .22s ease-out}
       if(!r.data.session)authErr('Check your email to confirm, then sign in here.');
     });
   };
-  $('signOut').onclick=function(){sb.auth.signOut()};
+  $('signOut').onclick=function(){$('setSheet').close();sb.auth.signOut()};
 
   /* ---------- haptics (iOS 18+: toggling a switch checkbox ticks the Taptic Engine) ---------- */
   var hap=document.createElement('label');hap.setAttribute('aria-hidden','true');hap.style.display='none';
@@ -496,21 +587,21 @@ dialog.sheet[open]{animation:up .22s ease-out}
   /* ---------- dates ---------- */
   function ord(n){if(n%100>=11&&n%100<=13)return 'th';return ({1:'st',2:'nd',3:'rd'})[n%10]||'th'}
   function daysInMonth(){var d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()}
-  function dueDay(i){return i.day?Math.min(i.day,daysInMonth()):0}       // "31st" falls on the last day in short months
+  function dueDay(i){return i.day?Math.min(i.day,daysInMonth()):0}
   function dayLabel(n){var d=new Date();d.setDate(n);return d.toLocaleDateString('en-GB',{weekday:'short'})+' '+n+ord(n)}
-  function shortDate(iso){var p=iso.split('-');return +p[2]+ord(+p[2])}
+  function shortDate(iso){var p=iso.slice(0,10).split('-');return +p[2]+ord(+p[2])}
 
-  /* ---------- render ---------- */
+  /* ---------- bills ---------- */
   function edited(){state.example=false;if(autoMatch())haptic();save();render()}
   function paidValue(i){return i.paidAmount!=null?i.paidAmount:i.amount}
   function metaFor(i){
     var today=new Date().getDate(),dd=dueDay(i);
-    if(i.paid&&i.txId)return{t:'Paid by Monzo on the '+shortDate(i.paidOn),c:'monzo'};
-    if(i.paid)return{t:'Ticked off'+(dd?' · due '+dd+ord(dd):''),c:''};
-    if(dd&&dd<today)return{t:'Overdue · due '+dayLabel(dd),c:'late'};
+    if(i.paid&&i.txId)return{t:'Paid by Monzo · '+shortDate(i.paidOn),c:'monzo'};
+    if(i.paid)return null;
+    if(dd&&dd<today)return{t:'Overdue · was due '+dayLabel(dd),c:'late'};
     if(dd===today)return{t:'Due today',c:'late'};
     if(dd)return{t:'Due '+dayLabel(dd),c:''};
-    return{t:words(i).length?'Matches “'+words(i).join('”, “')+'”':'No fixed date',c:''};
+    return null;
   }
   function billRow(it){
     var li=el('li');if(it.paid)li.classList.add('paid');
@@ -522,55 +613,111 @@ dialog.sheet[open]{animation:up .22s ease-out}
     };
     var row=el('button','row');row.type='button';row.setAttribute('aria-label','Edit '+it.name);
     var txt=el('span','txt'),m=metaFor(it);
-    txt.append(el('span','name',it.name),el('span','meta '+m.c,m.t));
+    txt.appendChild(el('span','name',it.name));if(m)txt.appendChild(el('span','meta '+m.c,m.t));
     var amt=el('span','amt',gbp.format(it.paid?paidValue(it):it.amount));
     if(it.paid&&it.paidAmount!=null&&Math.abs(it.paidAmount-it.amount)>=0.01)amt.appendChild(el('s',null,gbp.format(it.amount)));
     row.append(txt,amt);row.onclick=function(){openEdit(it)};
     li.append(cb,row);return li;
   }
+  function txRow(t,meta,onclick,extra){
+    var li=el('li','plain-li'),row=el('button','row');row.type='button';
+    var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta'+(extra||''),meta));
+    row.append(txt,el('span','amt',gbp.format(Math.abs(t.amount_pence)/100)));row.insertAdjacentHTML('beforeend',CHEV);
+    row.onclick=onclick;li.appendChild(row);return li;
+  }
+
   function render(){
     var total=0,paid=0,left=0;
     state.items.forEach(function(i){total+=i.amount;if(i.paid)paid+=paidValue(i);else left+=i.amount});
-    var free=state.income-total;
     $('month').textContent=new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    $('remaining').textContent=gbp.format(left);
-    $('mini').textContent=gbp.format(left);
-    $('paid').textContent=gbp.format(paid);
-    $('total').textContent=gbp.format(total);
-    $('free').textContent=gbp.format(free);
-    $('freeStat').classList.toggle('neg',free<0);$('freeStat').hidden=!state.income;
+    $('remaining').textContent=gbp.format(left);$('mini').textContent=gbp.format(left);
+    $('paid').textContent=gbp0.format(paid);$('total').textContent=gbp0.format(total);
+    $('freeTxt').textContent=state.income?gbp0.format(state.income-total)+' spare':'';
     $('progress').style.width=(total?Math.min(100,Math.round((total-left)/total*100)):0)+'%';
-    $('note').hidden=!state.example;
     if(document.activeElement!==$('income'))$('income').value=state.income||'';
 
     // Next bill due
     var today=new Date().getDate();
-    var upcoming=state.items.filter(function(i){return !i.paid&&dueDay(i)}).sort(function(a,b){return dueDay(a)-dueDay(b)});
-    var late=upcoming.filter(function(i){return dueDay(i)<today}),soon=upcoming.filter(function(i){return dueDay(i)>=today});
+    var dated=state.items.filter(function(i){return !i.paid&&dueDay(i)}).sort(function(a,b){return dueDay(a)-dueDay(b)});
+    var late=dated.filter(function(i){return dueDay(i)<today}),soon=dated.filter(function(i){return dueDay(i)>=today});
     var nx=$('next');nx.textContent='';
-    if(late.length||soon.length){
-      if(soon.length){var s=soon[0];nx.append('Next: ',el('b',null,s.name+' '+gbp.format(s.amount)),' '+(dueDay(s)===today?'today':'on '+dayLabel(dueDay(s))))}
-      if(late.length)nx.append((soon.length?' · ':''),el('b',null,late.length+' overdue'));
+    if(soon.length||late.length){
+      var txt=el('div','txt');
+      if(soon.length){var s=soon[0];txt.append(el('span',null,dueDay(s)===today?'Due today':'Next up · '+dayLabel(dueDay(s))),el('b',null,s.name+' · '+gbp.format(s.amount)))}
+      else{txt.append(el('span',null,'Nothing else due this month'))}
+      nx.appendChild(txt);
+      if(late.length)nx.appendChild(el('span','pill',late.length+' overdue'));
       nx.hidden=false;
     }else nx.hidden=true;
 
-    // Bills list, grouped, sorted by due day within each group
+    // Bills list
     var list=$('list');list.textContent='';
     if(!state.items.length)list.appendChild(el('li','empty','No bills yet. Tap “Add bill” to start.'));
     var cats=[];state.items.forEach(function(i){if(cats.indexOf(i.cat)<0)cats.push(i.cat)});
     var dl=$('cats');dl.textContent='';cats.forEach(function(c){var o=el('option');o.value=c;dl.appendChild(o)});
     cats.forEach(function(cat){
-      var group=state.items.filter(function(i){return i.cat===cat});
-      group=group.slice().sort(function(a,b){return (dueDay(a)||99)-(dueDay(b)||99)});
+      var group=state.items.filter(function(i){return i.cat===cat}).sort(function(a,b){return (a.paid-b.paid)||((dueDay(a)||99)-(dueDay(b)||99))});
       var l=0;group.forEach(function(i){if(!i.paid)l+=i.amount});
-      var h=el('li','cat');h.append(el('span',null,cat),el('span','num',gbp.format(l)+' left'));list.appendChild(h);
+      var h=el('li','cat');h.append(el('span',null,cat),el('span','num',l?gbp0.format(l)+' left':'All paid'));list.appendChild(h);
       group.forEach(function(it){list.appendChild(billRow(it))});
     });
-    renderMonzo();renderCal();
+
+    var un=unlinkedSpend().length;$('badge').textContent=un;$('badge').hidden=!un;
+    renderCal();renderSpend();
   }
 
-  function renderMonzo(){
-    if(!user||monzoTx===null){$('monzo').hidden=true;return}
+  /* ---------- calendar ---------- */
+  var selDay=new Date().getDate();
+  function renderCal(){
+    var now=new Date(),y=now.getFullYear(),m=now.getMonth(),today=now.getDate(),n=daysInMonth();
+    var txByDay={};(monzoTx||[]).forEach(function(t){if(t.amount_pence<0){var d=new Date(t.created_at).getDate();(txByDay[d]=txByDay[d]||[]).push(t)}});
+    var cal=$('cal');cal.textContent='';
+    ['M','T','W','T','F','S','S'].forEach(function(w){cal.appendChild(el('div','wd',w))});
+    var lead=(new Date(y,m,1).getDay()+6)%7;
+    for(var k=0;k<lead;k++)cal.appendChild(el('div'));
+    for(var d=1;d<=n;d++)(function(d){
+      var bills=state.items.filter(function(i){return dueDay(i)===d});
+      var b=el('button');b.type='button';
+      if(d===today)b.classList.add('today');if(d<today)b.classList.add('past');if(d===selDay)b.classList.add('sel');
+      b.appendChild(el('span',null,d));
+      var dots=el('span','dots');
+      bills.slice(0,3).forEach(function(i){dots.appendChild(el('i',i.paid?'paid':(d<today?'late':'')))});
+      if(txByDay[d]&&bills.length<3)dots.appendChild(el('i','tx'));
+      b.appendChild(dots);
+      b.setAttribute('aria-label',dayLabel(d)+': '+(bills.length?bills.map(function(i){return i.name}).join(', '):'nothing due'));
+      b.onclick=function(){selDay=d;haptic();renderCal()};
+      cal.appendChild(b);
+    })(d);
+
+    $('dayTitle').textContent=(selDay===today?'Today':dayLabel(selDay));
+    var dl=$('dayList');dl.textContent='';
+    state.items.filter(function(i){return dueDay(i)===selDay}).forEach(function(it){dl.appendChild(billRow(it))});
+    (txByDay[selDay]||[]).forEach(function(t){
+      var linked=state.items.find(function(i){return i.txId===t.id});
+      dl.appendChild(txRow(t,linked?'Monzo · paid '+linked.name:'Monzo · tap to link to a bill',function(){linked?openEdit(linked):openLink(t)},linked?' monzo':''));
+    });
+    if(!dl.children.length)dl.appendChild(el('li','empty','Nothing due or paid.'));
+
+    var any=state.items.filter(function(i){return !dueDay(i)});
+    $('anyHead').hidden=$('anyList').hidden=!any.length;
+    var al=$('anyList');al.textContent='';any.forEach(function(it){al.appendChild(billRow(it))});
+  }
+
+  /* ---------- spending + charts ---------- */
+  function monthKey(iso){var d=new Date(iso);return d.getFullYear()*12+d.getMonth()}
+  function sumBuckets(txs){
+    var s={ff:0,amz:0,out:0};
+    txs.forEach(function(t){
+      var b=bucketOf(t);if(!b)return;
+      if(t.amount_pence<0)s[b]-=t.amount_pence;else if(t.merchant_id)s[b]-=t.amount_pence;  // merchant refunds reduce the group
+    });
+    Object.keys(s).forEach(function(k){s[k]=Math.max(0,s[k])/100});return s;
+  }
+  function renderSpend(){
+    var on=!!user&&monzoTx!==null;
+    $('spendOff').hidden=on;$('spendOn').style.display=on?'contents':'none';
+    if(!on)return;
+    var now=new Date(),cur=now.getFullYear()*12+now.getMonth();
     var out=0,inc=0,cats={};
     monzoTx.forEach(function(t){
       var p=t.amount_pence;
@@ -578,104 +725,160 @@ dialog.sheet[open]{animation:up .22s ease-out}
       var c=(t.category||'other').replace(/_/g,' ');c=c.charAt(0).toUpperCase()+c.slice(1);
       cats[c]=(cats[c]||0)-p;out-=p;
     });
-    $('mOut').textContent=gbp.format(out/100);$('mIn').textContent=gbp.format(inc/100);
-    $('mNet').textContent=gbp.format((inc-out)/100);$('mNetStat').classList.toggle('neg',inc-out<0);
-    var list=$('mList');list.textContent='';
-    var un=unlinkedSpend().slice().reverse();
-    $('mHint').hidden=!un.length;
-    if(!un.length)list.appendChild(el('li','muted',monzoTx.length?'Every Monzo payment this month is matched to a bill.':'No Monzo payments yet this month.'));
-    un.forEach(function(t){
-      var li=el('li','txrow');
-      var row=el('button','row');row.type='button';
-      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta',shortDate(t.created_at.slice(0,10))+' · tap to link to a bill'));
-      row.append(txt,el('span','amt',gbp.format(-t.amount_pence/100)));
-      row.onclick=function(){openLink(t)};li.appendChild(row);list.appendChild(li);
+    $('mOut').textContent=gbp0.format(out/100);$('mIn').textContent=gbp0.format(inc/100);
+
+    // This month per group, with change vs last month
+    var thisM=sumBuckets(monzoTx);
+    var lastM=sumBuckets(histTx.filter(function(t){return monthKey(t.created_at)===cur-1}));
+    var hasLast=histTx.some(function(t){return monthKey(t.created_at)===cur-1});
+    var lastName=new Date(now.getFullYear(),now.getMonth()-1,1).toLocaleDateString('en-GB',{month:'long'});
+    var max=Math.max.apply(null,BUCKETS.map(function(b){return Math.max(thisM[b.key],hasLast?lastM[b.key]:0)}))||1;
+    var bk=$('bk');bk.textContent='';
+    BUCKETS.forEach(function(b){
+      var v=thisM[b.key],p=lastM[b.key],r=el('div','bk-row');
+      var top=el('div','top-line'),nm=el('span','nm');var sw=el('i');sw.style.background=b.color;nm.append(sw,b.label);
+      top.append(nm,el('span','val',gbp.format(v)));
+      var tr=el('div','track'),fill=el('i');fill.style.background=b.color;fill.style.width=(v/max*100)+'%';tr.appendChild(fill);
+      var dtxt=!hasLast?'No data for '+lastName+' yet':(Math.abs(v-p)<0.5?'Same as '+lastName:gbp0.format(Math.abs(v-p))+(v>p?' more':' less')+' than '+lastName+' ('+gbp0.format(p)+')');
+      r.append(top,tr,el('div','delta',dtxt));bk.appendChild(r);
     });
+
+    // Last 6 months grouped columns
+    var months=[];for(var i=5;i>=0;i--){var dt=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({k:cur-i,label:dt.toLocaleDateString('en-GB',{month:'short'}),long:dt.toLocaleDateString('en-GB',{month:'long',year:'numeric'})})}
+    months.forEach(function(mo){mo.v=sumBuckets(histTx.filter(function(t){return monthKey(t.created_at)===mo.k}))});
+    var lg=$('legend6');lg.textContent='';BUCKETS.forEach(function(b){var s=el('span'),i=el('i');i.style.background=b.color;i.style.borderRadius='2px';s.append(i,b.label);lg.appendChild(s)});
+    drawColumns($('chart6'),months);
+    var first=histTx.length?new Date(histTx[0].created_at):null;
+    $('histNote').textContent=first?'Monzo history starts '+first.toLocaleDateString('en-GB',{day:'numeric',month:'long'})+', when the webhook was connected.':'Monzo payments will build up here month by month.';
+    var tb='<table><tr><th>Month</th>'+BUCKETS.map(function(b){return '<th>'+b.label+'</th>'}).join('')+'</tr>'+
+      months.map(function(mo){return '<tr><td>'+mo.label+'</td>'+BUCKETS.map(function(b){return '<td>'+gbp0.format(mo.v[b.key])+'</td>'}).join('')+'</tr>'}).join('')+'</table>';
+    $('table6').innerHTML=tb;
+
+    // Top places in the three groups this month
+    var places={};monzoTx.forEach(function(t){var b=bucketOf(t);if(!b||t.amount_pence>=0)return;var n=txName(t);places[n]=places[n]||{n:n,b:b,v:0,c:0};places[n].v-=t.amount_pence;places[n].c++});
+    var top=Object.keys(places).map(function(k){return places[k]}).sort(function(a,b){return b.v-a.v}).slice(0,6);
+    var pl=$('places');pl.textContent='';$('placesHead').hidden=pl.hidden=!top.length;
+    top.forEach(function(p){
+      var li=el('li','place'),bd=el('i','bdot');bd.style.background=BUCKETS.find(function(b){return b.key===p.b}).color;
+      var row=el('div','row');row.style.cursor='default';
+      var txt=el('span','txt');txt.append(el('span','name',p.n),el('span','meta',BUCKETS.find(function(b){return b.key===p.b}).label+' · '+p.c+(p.c===1?' visit':' visits')));
+      row.append(txt,el('span','amt',gbp.format(p.v/100)));li.append(bd,row);pl.appendChild(li);
+    });
+
+    // Payments to link
+    var un=unlinkedSpend().slice().reverse(),ul=$('unlinked');ul.textContent='';
+    $('unHead').hidden=ul.hidden=!un.length;
+    un.slice(0,15).forEach(function(t){ul.appendChild(txRow(t,shortDate(t.created_at)+' · tap to make it a bill',function(){openLink(t)}))});
+
     var mc=$('mCats');mc.textContent='';
     Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]}).forEach(function(n){
       var r=el('div','catrow');r.append(el('span',null,n),el('span','num',gbp.format(cats[n]/100)));mc.appendChild(r);
     });
-    $('monzo').hidden=false;
+    if(!mc.children.length)mc.appendChild(el('div','catrow','No Monzo spending yet this month.'));
   }
 
-  /* ---------- calendar ---------- */
-  var selDay=new Date().getDate();
-  function renderCal(){
-    var now=new Date(),y=now.getFullYear(),m=now.getMonth(),today=now.getDate(),n=daysInMonth();
-    $('calTitle').textContent=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    var dueCount=state.items.filter(function(i){return dueDay(i)}).length;
-    $('calSub').textContent=dueCount?dueCount+' dated bills':'Set due days in each bill';
-    var txByDay={};(monzoTx||[]).forEach(function(t){if(t.amount_pence<0){var d=new Date(t.created_at).getDate();(txByDay[d]=txByDay[d]||[]).push(t)}});
-    var cal=$('cal');cal.textContent='';
-    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(w){cal.appendChild(el('div','wd',w.charAt(0)))});
-    var lead=(new Date(y,m,1).getDay()+6)%7;
-    for(var k=0;k<lead;k++)cal.appendChild(el('div'));
-    for(var d=1;d<=n;d++)(function(d){
-      var bills=state.items.filter(function(i){return dueDay(i)===d});
-      var b=el('button');b.type='button';
-      if(bills.length||txByDay[d])b.classList.add('has');
-      if(d===today)b.classList.add('today');if(d<today)b.classList.add('past');if(d===selDay)b.classList.add('sel');
-      b.appendChild(el('span',null,d));
-      var dots=el('span','dots');
-      bills.slice(0,4).forEach(function(i){dots.appendChild(el('i',i.paid?'paid':(d<today?'late':'')))});
-      if(txByDay[d]&&bills.length<4)dots.appendChild(el('i','tx'));
-      b.appendChild(dots);
-      b.setAttribute('aria-label',dayLabel(d)+': '+(bills.length?bills.map(function(i){return i.name}).join(', '):'nothing due'));
-      b.onclick=function(){selDay=d;renderCal()};
-      cal.appendChild(b);
-    })(d);
-
-    // Selected day
-    $('dayTitle').textContent=(selDay===today?'Today, ':'')+dayLabel(selDay);
-    var dl=$('dayList');dl.textContent='';
-    var bills=state.items.filter(function(i){return dueDay(i)===selDay});
-    bills.forEach(function(it){dl.appendChild(billRow(it))});
-    (txByDay[selDay]||[]).forEach(function(t){
-      var li=el('li','txrow'),row=el('button','row');row.type='button';
-      var linked=state.items.find(function(i){return i.txId===t.id});
-      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta'+(linked?' monzo':''),linked?'Monzo · paid '+linked.name:'Monzo payment · tap to link'));
-      row.append(txt,el('span','amt',gbp.format(-t.amount_pence/100)));
-      row.onclick=function(){linked?openEdit(linked):openLink(t)};li.appendChild(row);dl.appendChild(li);
+  var closeTip=function(){};
+  document.addEventListener('click',function(e){if(e.target!==hap&&e.target!==hapIn)closeTip()}); // haptic clicks don't count
+  function niceMax(v){if(v<=0)return 50;var p=Math.pow(10,Math.floor(Math.log10(v))),n=v/p;return (n<=1?1:n<=2?2:n<=2.5?2.5:n<=5?5:10)*p}
+  function drawColumns(wrap,months){
+    wrap.textContent='';
+    var W=Math.max(280,wrap.clientWidth||320),H=190,padL=40,padB=24,padT=8,ns='http://www.w3.org/2000/svg';
+    var max=0;months.forEach(function(mo){BUCKETS.forEach(function(b){max=Math.max(max,mo.v[b.key])})});
+    var top=niceMax(max),plotH=H-padB-padT,plotW=W-padL;
+    var svg=document.createElementNS(ns,'svg');svg.setAttribute('viewBox','0 0 '+W+' '+H);svg.setAttribute('width','100%');svg.setAttribute('role','img');
+    svg.setAttribute('aria-label','Spending on fast food, Amazon and going out for each of the last 6 months');
+    function mk(tag,attrs){var e=document.createElementNS(ns,tag);for(var a in attrs)e.setAttribute(a,attrs[a]);return e}
+    [0,.5,1].forEach(function(f){
+      var y=padT+plotH-f*plotH;
+      svg.appendChild(mk('line',{x1:padL,x2:W,y1:y,y2:y,class:'grid'}));
+      var t=mk('text',{x:padL-8,y:y+4,'text-anchor':'end'});t.textContent=gbp0.format(top*f);svg.appendChild(t);
     });
-    if(!dl.children.length)dl.appendChild(el('li','empty','Nothing due or paid on this day.'));
-
-    var any=state.items.filter(function(i){return !dueDay(i)});
-    $('anyWrap').hidden=!any.length;
-    var al=$('anyList');al.textContent='';any.forEach(function(it){al.appendChild(billRow(it))});
+    var slot=plotW/months.length,bw=Math.min(14,(slot-14)/3-2),gw=bw*3+4,y0=padT+plotH;
+    var hl=mk('rect',{class:'hl',x:0,y:padT,width:slot-4,height:plotH,rx:8,visibility:'hidden'});svg.appendChild(hl);
+    var tip=el('div','tip');tip.hidden=true;
+    months.forEach(function(mo,mi){
+      var cx=padL+slot*mi+slot/2,x=cx-gw/2;
+      BUCKETS.forEach(function(b,bi){
+        var v=mo.v[b.key],h=v/top*plotH;if(h<=0)return;
+        var bx=x+bi*(bw+2),r=Math.min(4,h,bw/2);
+        // rounded data-end (top), square at the baseline
+        svg.appendChild(mk('path',{d:'M'+bx+','+y0+'V'+(y0-h+r)+'Q'+bx+','+(y0-h)+' '+(bx+r)+','+(y0-h)+'H'+(bx+bw-r)+'Q'+(bx+bw)+','+(y0-h)+' '+(bx+bw)+','+(y0-h+r)+'V'+y0+'Z',fill:getComputedStyle(document.documentElement).getPropertyValue(b.color.slice(4,-1)).trim()}));
+      });
+      var lab=mk('text',{x:cx,y:H-6,'text-anchor':'middle'});lab.textContent=mo.label;svg.appendChild(lab);
+      var hit=mk('rect',{class:'hit',x:padL+slot*mi,y:0,width:slot,height:H});
+      hit.addEventListener('click',function(e){
+        e.stopPropagation();
+        var same=!tip.hidden&&tip.dataset.m==mi;
+        if(same){tip.hidden=true;hl.setAttribute('visibility','hidden');return}
+        hl.setAttribute('x',padL+slot*mi+2);hl.setAttribute('visibility','visible');
+        tip.dataset.m=mi;tip.innerHTML='';tip.appendChild(el('b',null,mo.long));
+        BUCKETS.forEach(function(b){var row=el('div'),k=el('span'),sw=el('i');sw.style.background=b.color;k.append(sw,b.label);row.append(k,el('span','v',gbp.format(mo.v[b.key])));tip.appendChild(row)});
+        var tot=BUCKETS.reduce(function(s,b){return s+mo.v[b.key]},0);var tr=el('div');tr.style.marginTop='4px';tr.append(el('span',null,'Total'),el('span','v',gbp.format(tot)));tip.appendChild(tr);
+        tip.hidden=false;
+        var px=(cx/W)*wrap.clientWidth,tw=tip.offsetWidth;
+        tip.style.left=Math.max(0,Math.min(wrap.clientWidth-tw,px-tw/2))+'px';tip.style.top='-8px';tip.style.transform='translateY(-100%)';
+        haptic();
+      });
+      svg.appendChild(hit);
+    });
+    wrap.appendChild(svg);wrap.appendChild(tip);
+    closeTip=function(){tip.hidden=true;hl.setAttribute('visibility','hidden')};
   }
+  var rT;window.addEventListener('resize',function(){clearTimeout(rT);rT=setTimeout(function(){if(curTab==='spend')renderSpend()},150)});
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){renderSpend()});
 
   /* ---------- tabs ---------- */
+  var curTab='bills',TITLES={bills:'Bills',cal:'Calendar',spend:'Spending'};
   function showTab(t){
-    var cal=t==='cal';
-    $('tabBills').setAttribute('aria-selected',!cal);$('tabCal').setAttribute('aria-selected',cal);
-    $('viewBills').style.display=cal?'none':'flex';$('viewCal').hidden=!cal;$('viewCal').style.display=cal?'flex':'none';
-    store(TAB,t);
+    curTab=t;
+    ['bills','cal','spend'].forEach(function(k){
+      var id={bills:'Bills',cal:'Cal',spend:'Spend'}[k];
+      $('tab'+id).setAttribute('aria-selected',k===t);$('view'+id).hidden=k!==t;
+    });
+    $('title').textContent=TITLES[t];$('mini').hidden=t!=='bills';
+    store(TAB,t);window.scrollTo(0,0);
+    if(t==='spend')renderSpend();
   }
   $('tabBills').onclick=function(){showTab('bills')};
   $('tabCal').onclick=function(){selDay=new Date().getDate();renderCal();showTab('cal')};
+  $('tabSpend').onclick=function(){showTab('spend')};
 
-  /* ---------- edit sheet ---------- */
+  /* ---------- sheets ---------- */
   function outside(e,d){if(e.target!==d)return false;var r=d.getBoundingClientRect();return e.clientY<r.top||e.clientY>r.bottom||e.clientX<r.left||e.clientX>r.right}
-  var editing_=null;
-  (function(){var s=$('fDay');var o=el('option',null,'No fixed date');o.value='0';s.appendChild(o);
-    for(var d=1;d<=31;d++){o=el('option',null,d+ord(d)+' of the month');o.value=String(d);s.appendChild(o)}})();
+  ['editSheet','linkSheet','setSheet'].forEach(function(id){
+    var d=$(id);
+    d.addEventListener('click',function(e){if(outside(e,d))d.close()});
+    d.addEventListener('close',function(){if(pendingRemote&&!anySheetOpen())applyRemote(pendingRemote)});
+  });
+
+  // Settings
+  $('setBtn').onclick=function(){$('setSheet').showModal()};
+  $('setClose').onclick=function(){$('setSheet').close()};
+  $('income').oninput=function(){var v=parseFloat($('income').value);state.income=isNaN(v)?0:v;save();render()};
+  $('reset').onclick=function(){
+    state.items.forEach(clearPaid);state.ignoredTx=[];state.month=thisMonth();
+    autoMatch();haptic();save();render();$('setSheet').close();toast('Unticked everything for a new month',null);
+  };
+
+  // Edit / add
+  var editingItem=null,pendingLink=null,linking=null;
+  (function(){var s=$('fDay');var o=el('option',null,'Any time');o.value='0';s.appendChild(o);
+    for(var d=1;d<=31;d++){o=el('option',null,d+ord(d)+' of month');o.value=String(d);s.appendChild(o)}})();
   function openEdit(it,prefill){
-    editing_=it||null;
-    $('editTitle').textContent=it?'Edit bill':'Add bill';
+    editingItem=it||null;
+    $('editTitle').textContent=it?it.name:'New bill';
     var src=it||prefill||{};
     $('fName').value=src.name||'';$('fAmt').value=src.amount!=null?src.amount:'';
     $('fDay').value=String(src.day||0);$('fCat').value=src.cat||'';$('fMatch').value=src.match||'';
     $('fDelete').hidden=!it;
-    var linkedTx=it&&it.txId;
-    $('fLinked').hidden=!linkedTx;
-    if(linkedTx)$('fLinkedTxt').textContent='Paid by Monzo: '+gbp.format(it.paidAmount)+' on the '+shortDate(it.paidOn);
-    // Recent Monzo merchant names as one-tap match words
-    var chips=$('chips');chips.textContent='';var seen={};
+    $('fLinked').hidden=!(it&&it.txId);
+    if(it&&it.txId)$('fLinkedTxt').textContent='Paid by Monzo: '+gbp.format(it.paidAmount)+' on the '+shortDate(it.paidOn);
+    var chips=$('chips');chips.textContent='';var seen={},n=0;
     (monzoTx||[]).slice().reverse().forEach(function(t){
-      if(t.amount_pence>=0)return;var w=(t.merchant_name||t.description||'').trim().toLowerCase();
-      if(!w||seen[w]||Object.keys(seen).length>=10)return;seen[w]=1;
+      if(t.amount_pence>=0||n>=8)return;var w=(t.merchant_name||t.description||'').trim().toLowerCase();
+      if(!w||seen[w])return;seen[w]=1;n++;
       var c=el('button',null,'+ '+w);c.type='button';
-      c.onclick=function(){var cur=$('fMatch').value.split(',').map(function(s){return s.trim()}).filter(Boolean);if(cur.indexOf(w)<0)cur.push(w);$('fMatch').value=cur.join(', ')};
+      c.onclick=function(){var cur=$('fMatch').value.split(',').map(function(s){return s.trim()}).filter(Boolean);if(cur.indexOf(w)<0)cur.push(w);$('fMatch').value=cur.join(', ');haptic()};
       chips.appendChild(c);
     });
     $('editSheet').showModal();
@@ -685,41 +888,37 @@ dialog.sheet[open]{animation:up .22s ease-out}
     var name=$('fName').value.trim(),a=parseFloat($('fAmt').value);
     if(!name||isNaN(a)||a<0)return;
     var data={name:name,amount:a,day:+$('fDay').value,cat:$('fCat').value.trim()||'Other',match:$('fMatch').value.split(',').map(function(s){return s.trim().toLowerCase()}).filter(Boolean).join(', ')};
-    if(editing_)Object.assign(editing_,data);
-    else{if(state.example)state.items=[];var it=Object.assign({id:uid(),paid:false},data);state.items.push(it);if(pendingLink){markPaidBy(it,pendingLink)}}
-    pendingLink=null;
-    $('editSheet').close();haptic();edited();
+    if(editingItem)Object.assign(editingItem,data);
+    else{if(state.example)state.items=[];var it=Object.assign({id:uid(),paid:false},data);state.items.push(it);if(pendingLink)markPaidBy(it,pendingLink)}
+    pendingLink=null;$('editSheet').close();haptic();edited();
   };
   $('fCancel').onclick=function(){pendingLink=null;$('editSheet').close()};
-  $('fUnlink').onclick=function(){if(!editing_)return;state.ignoredTx.push(editing_.txId);clearPaid(editing_);$('fLinked').hidden=true;save();render()};
+  $('fUnlink').onclick=function(){if(!editingItem)return;state.ignoredTx.push(editingItem.txId);clearPaid(editingItem);$('fLinked').hidden=true;save();render()};
   $('fDelete').onclick=function(){
-    var it=editing_;if(!it)return;
+    var it=editingItem;if(!it)return;
     var idx=state.items.indexOf(it);state.items.splice(idx,1);
     $('editSheet').close();haptic();edited();toast('Deleted '+it.name,{item:it,index:idx});
   };
-  $('editSheet').addEventListener('close',function(){if(pendingRemote)applyRemote(pendingRemote)});
-  $('editSheet').addEventListener('click',function(e){if(outside(e,$('editSheet')))$('editSheet').close()}); // tap backdrop
+  $('addBtn').onclick=function(){pendingLink=null;openEdit(null)};
 
-  /* ---------- link sheet: teach a bill a new match word ---------- */
-  var linking=null,pendingLink=null;
+  // Link a Monzo payment to a bill (teaches the bill a match word)
   function openLink(t){
     linking=t;
-    $('linkTx').textContent=txName(t)+' · '+gbp.format(-t.amount_pence/100)+' on the '+shortDate(t.created_at.slice(0,10));
+    $('linkTx').textContent=txName(t)+' · '+gbp.format(-t.amount_pence/100)+' on the '+shortDate(t.created_at);
     var ul=$('linkList');ul.textContent='';
-    var bills=state.items.filter(function(i){return !i.txId}).sort(function(a,b){return (a.paid-b.paid)});
+    var bills=state.items.filter(function(i){return !i.txId}).sort(function(a,b){return a.paid-b.paid});
     if(!bills.length)ul.appendChild(el('li','empty','Every bill is already matched this month.'));
     bills.forEach(function(it){
-      var li=el('li'),row=el('button','row');row.type='button';
-      var txt=el('span','txt');txt.append(el('span','name',it.name),el('span','meta',it.cat+(it.paid?' · ticked off':'')));
+      var li=el('li'),row=el('button','row');row.type='button';row.style.paddingLeft='0';
+      var txt=el('span','txt');txt.append(el('span','name',it.name),el('span','meta',it.cat+(it.paid?' · already ticked':'')));
       row.append(txt,el('span','amt',gbp.format(it.amount)));
       row.onclick=function(){
         var w=(t.merchant_name||t.description||'').trim().toLowerCase();
         if(w&&words(it).indexOf(w)<0)it.match=words(it).concat([w]).join(', ');
-        // Same merchant also covers sibling bills ("Food shop 1..4") so future visits tick the next one.
         var base=it.name.replace(/\s*\d+$/,'');
-        if(w)state.items.forEach(function(o){if(o!==it&&o.name.replace(/\s*\d+$/,'')===base&&base!==it.name&&words(o).indexOf(w)<0)o.match=words(o).concat([w]).join(', ')});
+        if(w&&base!==it.name)state.items.forEach(function(o){if(o!==it&&o.name.replace(/\s*\d+$/,'')===base&&words(o).indexOf(w)<0)o.match=words(o).concat([w]).join(', ')});
         markPaidBy(it,t);state.ignoredTx=state.ignoredTx.filter(function(id){return id!==t.id});
-        $('linkSheet').close();haptic();edited();toast(it.name+' paid · future “'+w+'” payments will match',null);
+        $('linkSheet').close();haptic();edited();toast(it.name+' paid · “'+w+'” will match from now on',null);
       };
       li.appendChild(row);ul.appendChild(li);
     });
@@ -731,24 +930,15 @@ dialog.sheet[open]{animation:up .22s ease-out}
     var w=(t.merchant_name||t.description||'').trim();
     openEdit(null,{name:w,amount:-t.amount_pence/100,day:new Date(t.created_at).getDate(),match:w.toLowerCase(),cat:''});
   };
-  $('linkSheet').addEventListener('close',function(){if(pendingRemote&&!$('editSheet').open)applyRemote(pendingRemote)});
-  $('linkSheet').addEventListener('click',function(e){if(outside(e,$('linkSheet')))$('linkSheet').close()});
-
-  $('income').oninput=function(){var v=parseFloat($('income').value);state.income=isNaN(v)?0:v;save();render()};
-  $('addBtn').onclick=function(){pendingLink=null;openEdit(null)};
-  $('reset').onclick=function(){
-    state.items.forEach(clearPaid);state.ignoredTx=[];state.month=thisMonth();
-    autoMatch();haptic();save();render();toast('Unticked everything for a new month',null);
-  };
 
   if('IntersectionObserver' in window){
-    new IntersectionObserver(function(es){$('top').classList.toggle('scrolled',!es[0].isIntersecting)},{rootMargin:'-80px 0px 0px 0px'}).observe($('remaining'));
+    new IntersectionObserver(function(es){$('top').classList.toggle('scrolled',!es[0].isIntersecting)},{rootMargin:'-60px 0px 0px 0px'}).observe($('remaining'));
   }
 
   /* ---------- boot ---------- */
   try{var raw=read(KEY);if(raw&&load(JSON.parse(raw)))store(KEY,JSON.stringify(state))}catch(e){}
   render();
-  showTab(read(TAB)==='cal'?'cal':'bills');
+  var saved=read(TAB);showTab(saved==='cal'||saved==='spend'?saved:'bills');
   setUser(null);
   if(sb){
     sb.auth.getSession().then(function(r){setUser(r.data.session&&r.data.session.user)});
