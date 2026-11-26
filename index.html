@@ -445,6 +445,25 @@ li:has(>.row:active) .row{background:none}
       state.items.forEach(function(i){if(i.match==null)i.match=STARTER_MATCH[i.id]||''});
       state.matchSeeded=true;changed=true;
     }
+    // One-time: due dates, amounts and match words from Monzo's scheduled payments (Nov 2026).
+    if(!state.scheduleV1){
+      var byId=function(id){return state.items.find(function(i){return i.id===id})};
+      var addWord=function(i,w){var ws=(i.match||'').split(',').map(function(x){return x.trim()}).filter(Boolean);if(ws.indexOf(w)<0)ws.push(w);i.match=ws.join(', ')};
+      var addAfter=function(afterId,item){if(byId(item.id))return;var k=state.items.findIndex(function(i){return i.id===afterId});state.items.splice(k<0?state.items.length:k+1,0,item)};
+      var it;
+      if((it=byId('s0'))){it.day=9;it.amount=143;addWord(it,'admiral')}
+      if((it=byId('s7'))){it.day=2}
+      if((it=byId('s4'))){it.name='Amazon Prime';it.amount=4.49;it.day=16;it.match='amazon prime, amznprime'}
+      addAfter('s4',{id:'s4v',cat:(byId('s4')||{}).cat||'Subscriptions',name:'Prime Video',amount:2.99,day:3,paid:false,match:'prime video'});
+      if((it=byId('s6'))){it.day=6}
+      if((it=byId('s3'))){it.name='Apple 1';it.amount=17;it.day=14;addWord(it,'apple')}
+      addAfter('s3',{id:'s3b',cat:(byId('s3')||{}).cat||'Subscriptions',name:'Apple 2',amount:2.99,day:23,paid:false,match:'apple'});
+      if((it=byId('s8'))){it.day=21}
+      if((it=byId('s5'))){it.amount=5.99;it.day=22}
+      if((it=byId('s9'))){it.day=26;addWord(it,'id mobile')}
+      addAfter('s9',{id:'s14',cat:(byId('s9')||{}).cat||'Subscriptions',name:'Monzo',amount:3,day:1,paid:false,match:''});
+      state.scheduleV1=true;changed=true;
+    }
     if(state.month!==thisMonth()){state.month=thisMonth();state.items.forEach(clearPaid);state.ignoredTx=[];changed=true}
     return changed;
   }
@@ -550,7 +569,12 @@ li:has(>.row:active) .row{background:none}
     monzoTx.forEach(function(t){
       if(t.amount_pence>=0||used[t.id])return;
       var hay=((t.merchant_name||'')+' '+(t.description||'')).toLowerCase();
-      var bill=state.items.find(function(i){return !i.paid&&words(i).some(function(w){return hay.indexOf(w)>=0})});
+      // Of the bills that match by name, pick the one whose amount is closest (e.g. Apple £17 vs £2.99).
+      var amt=-t.amount_pence/100,bill=null;
+      state.items.forEach(function(i){
+        if(i.paid||!words(i).some(function(w){return hay.indexOf(w)>=0}))return;
+        if(!bill||Math.abs(i.amount-amt)<Math.abs(bill.amount-amt)-0.005)bill=i;
+      });
       if(bill){markPaidBy(bill,t);used[t.id]=1;changed=true}
     });
     return changed;
