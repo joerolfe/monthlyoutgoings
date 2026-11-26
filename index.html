@@ -194,13 +194,17 @@ td:first-child{font-family:var(--font)}
 .tabbar .badge{position:absolute;top:2px;left:calc(50% + 8px);min-width:18px;height:18px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;display:grid;place-content:center;padding:0 5px}
 
 /* Sheets */
-dialog.sheet{position:fixed;inset:auto 0 var(--kb,0px) 0;margin:0 auto;width:100%;max-width:560px;max-height:calc(var(--vvh,100dvh) - var(--sat) - 12px);overscroll-behavior:contain;touch-action:pan-y;overflow:auto;border:0;border-radius:22px 22px 0 0;
+dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:560px;max-height:calc(100dvh - var(--sat) - 12px);overscroll-behavior:contain;touch-action:pan-y;overflow:auto;border:0;border-radius:22px 22px 0 0;
   background:var(--bg);color:var(--fg);padding:8px max(18px,var(--sal)) calc(18px + var(--sab));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
 dialog.sheet::backdrop{background:rgba(0,0,0,.4)}
 dialog.sheet[open]{animation:up .24s cubic-bezier(.2,.8,.2,1)}
 @keyframes up{from{transform:translateY(60px);opacity:.5}}
 .grab{width:36px;height:5px;border-radius:3px;background:var(--faint);opacity:.5;margin:0 auto 14px}
 .sheet h2{font-size:22px;margin:0 0 16px;outline:none}
+.sheet-head{position:sticky;top:-8px;z-index:2;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;margin:-8px calc(-1 * max(18px,var(--sal))) 10px;padding:8px max(18px,var(--sal)) 6px;background:var(--bg)}
+.sheet-head h2{margin:0;font-size:17px;font-weight:600;text-align:center;max-width:52vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sheet-head .link{font-size:17px;justify-self:start}
+.sheet-head .save{justify-self:end;font-weight:700}
 .sheet form{display:grid;gap:14px}
 .field{display:grid;gap:6px}
 .field>.label{padding-left:4px}
@@ -359,24 +363,24 @@ li:has(>.row:active) .row{background:none}
 <!-- Edit / add bill -->
 <dialog class="sheet" id="editSheet" aria-labelledby="editTitle">
   <div class="grab"></div>
-  <h2 id="editTitle" tabindex="-1" autofocus>Edit bill</h2>
+  <div class="sheet-head">
+    <button class="link" type="button" id="fCancel">Cancel</button>
+    <h2 id="editTitle" tabindex="-1" autofocus>Edit bill</h2>
+    <button class="link save" type="submit" form="editForm" id="fSave">Save</button>
+  </div>
   <form id="editForm" method="dialog">
-    <div class="field"><label class="label" for="fName">Name</label><input id="fName" required autocapitalize="sentences"></div>
+    <div class="field"><label class="label" for="fName">Name</label><input id="fName" required autocapitalize="sentences" enterkeyhint="done"></div>
     <div class="two">
-      <div class="field"><label class="label" for="fAmt">Amount £</label><input id="fAmt" class="num" type="number" inputmode="decimal" min="0" step="0.01" required></div>
+      <div class="field"><label class="label" for="fAmt">Amount £</label><input id="fAmt" class="num" type="number" inputmode="decimal" min="0" step="0.01" required enterkeyhint="done"></div>
       <div class="field"><label class="label" for="fDay">Due</label><select id="fDay"></select></div>
     </div>
-    <div class="field"><label class="label" for="fCat">Group</label><input id="fCat" list="cats" placeholder="e.g. Car"><datalist id="cats"></datalist></div>
+    <div class="field"><label class="label" for="fCat">Group</label><input id="fCat" list="cats" placeholder="e.g. Car" enterkeyhint="done"><datalist id="cats"></datalist></div>
     <div class="field">
       <label class="label" for="fMatch">Tick off when a Monzo payment contains</label>
-      <input id="fMatch" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. aldi, lidl">
+      <input id="fMatch" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. aldi, lidl" enterkeyhint="done">
       <div class="chips" id="chips"></div>
     </div>
     <div class="linked" id="fLinked" hidden><span id="fLinkedTxt"></span><button class="link" type="button" id="fUnlink">Unlink</button></div>
-    <div class="actions">
-      <button class="ghost" type="button" id="fCancel">Cancel</button>
-      <button class="primary" type="submit" value="save">Save</button>
-    </div>
     <button class="ghost danger" type="button" id="fDelete">Delete bill</button>
   </form>
 </dialog>
@@ -437,17 +441,6 @@ li:has(>.row:active) .row{background:none}
     state=raw; if(typeof state.updatedAt!=='number')state.updatedAt=0;
     var changed=false;
     if(!Array.isArray(state.ignoredTx)){state.ignoredTx=[];changed=true}
-    function split(id,cat,base,n,each,ids){
-      var k=state.items.findIndex(function(i){return i.id===id&&i.amount===each*n});
-      if(k<0)return;
-      var p=state.items[k].paid,parts=[];
-      for(var j=0;j<n;j++)parts.push({id:ids[j],cat:cat,name:base+' '+(j+1),amount:each,day:0,paid:j===0&&p});
-      state.items.splice.apply(state.items,[k,1].concat(parts));changed=true;
-    }
-    split('s1','Car','Fuel',2,60,['s1','s1b']);
-    split('s10','Everything else','Haircut',2,16,['s10','s10b']);
-    split('s13','Everything else','Rent',2,50,['s13','s13b']);
-    split('s12','Everything else','Food shop',4,50,['s12','s12b','s12c','s12d']);
     if(!state.matchSeeded){
       state.items.forEach(function(i){if(i.match==null)i.match=STARTER_MATCH[i.id]||''});
       state.matchSeeded=true;changed=true;
@@ -876,7 +869,7 @@ li:has(>.row:active) .row{background:none}
   ['editSheet','linkSheet','setSheet'].forEach(function(id){
     var d=$(id);
     d.addEventListener('click',function(e){if(outside(e,d))d.close()});
-    d.addEventListener('close',function(){if(pendingRemote&&!anySheetOpen())applyRemote(pendingRemote)});
+    d.addEventListener('close',function(){setTimeout(function(){if(pendingRemote&&!anySheetOpen())applyRemote(pendingRemote)},0)});
   });
 
   // Settings
@@ -909,24 +902,36 @@ li:has(>.row:active) .row{background:none}
       c.onclick=function(){var cur=$('fMatch').value.split(',').map(function(s){return s.trim()}).filter(Boolean);if(cur.indexOf(w)<0)cur.push(w);$('fMatch').value=cur.join(', ');haptic()};
       chips.appendChild(c);
     });
+    editDone=false;editSnap=formSnap();
     $('editSheet').showModal();
+  }
+  var editDone=true,editSnap='';
+  function formSnap(){return [$('fName').value,$('fAmt').value,$('fDay').value,$('fCat').value,$('fMatch').value].join('|')}
+  function commitEdit(){
+    var name=$('fName').value.trim(),a=parseFloat($('fAmt').value);
+    if(!name||isNaN(a)||a<0)return false;
+    var data={name:name,amount:a,day:+$('fDay').value,cat:$('fCat').value.trim()||'Other',match:$('fMatch').value.split(',').map(function(s){return s.trim().toLowerCase()}).filter(Boolean).join(', ')};
+    if(editingItem){var live=state.items.find(function(i){return i.id===editingItem.id})||editingItem;Object.assign(live,data)}
+    else{if(state.example)state.items=[];var it=Object.assign({id:uid(),paid:false},data);state.items.push(it);if(pendingLink)markPaidBy(it,pendingLink)}
+    pendingLink=null;editDone=true;haptic();edited();return true;
   }
   $('editForm').onsubmit=function(ev){
     ev.preventDefault();
-    var name=$('fName').value.trim(),a=parseFloat($('fAmt').value);
-    if(!name||isNaN(a)||a<0)return;
-    var data={name:name,amount:a,day:+$('fDay').value,cat:$('fCat').value.trim()||'Other',match:$('fMatch').value.split(',').map(function(s){return s.trim().toLowerCase()}).filter(Boolean).join(', ')};
-    if(editingItem)Object.assign(editingItem,data);
-    else{if(state.example)state.items=[];var it=Object.assign({id:uid(),paid:false},data);state.items.push(it);if(pendingLink)markPaidBy(it,pendingLink)}
-    pendingLink=null;$('editSheet').close();haptic();edited();
+    if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+    if(commitEdit())$('editSheet').close();else $('editForm').reportValidity();
   };
-  $('fCancel').onclick=function(){pendingLink=null;$('editSheet').close()};
+  // Swiping the sheet away or tapping outside keeps your changes to an existing bill.
+  $('editSheet').addEventListener('close',function(){
+    if(!editDone&&editingItem&&formSnap()!==editSnap)commitEdit();
+    editDone=true;
+  });
+  $('fCancel').onclick=function(){pendingLink=null;editDone=true;$('editSheet').close()};
   $('fUnlink').onclick=function(){if(!editingItem)return;state.ignoredTx.push(editingItem.txId);clearPaid(editingItem);$('fLinked').hidden=true;save();render()};
   function deleteItem(it){
     var idx=state.items.indexOf(it);if(idx<0)return;state.items.splice(idx,1);
     haptic();edited();toast('Deleted '+it.name,{item:it,index:idx});
   }
-  $('fDelete').onclick=function(){var it=editingItem;if(!it)return;$('editSheet').close();deleteItem(it)};
+  $('fDelete').onclick=function(){var it=editingItem;if(!it)return;editDone=true;$('editSheet').close();deleteItem(it)};
 
   /* swipe rows */
   var openSwipe=null,OPEN_X=-148;
@@ -989,27 +994,17 @@ li:has(>.row:active) .row{background:none}
   }
 
   /* ---------- mobile: keyboard, sheet swipe, scroll lock, pull to refresh ---------- */
-  // Keep sheets above the on-screen keyboard (iOS shrinks the visual viewport, not the layout one).
-  if(window.visualViewport){
-    var vv=window.visualViewport,rootS=document.documentElement.style;
-    var onVV=function(){var kb=Math.max(0,window.innerHeight-vv.height-vv.offsetTop);rootS.setProperty('--kb',kb+'px');rootS.setProperty('--vvh',vv.height+'px')};
-    vv.addEventListener('resize',onVV);vv.addEventListener('scroll',onVV);onVV();
-  }
-  document.addEventListener('focusin',function(e){
-    var d=e.target.closest&&e.target.closest('dialog');
-    if(d&&/INPUT|SELECT/.test(e.target.tagName))setTimeout(function(){e.target.scrollIntoView({block:'center',behavior:'smooth'})},300);
-  });
   // Lock the page behind an open sheet; swipe a sheet down to close it.
   ['editSheet','linkSheet','setSheet'].forEach(function(id){
     var d=$(id),y0=null,dy=0,canDrag=false;
     new MutationObserver(function(){document.documentElement.classList.toggle('lock',anySheetOpen());if(!d.open)d.style.transform=''}).observe(d,{attributes:true,attributeFilter:['open']});
     d.addEventListener('touchstart',function(e){
-      var t=e.target;canDrag=d.scrollTop<=0&&!/INPUT|SELECT|TEXTAREA/.test(t.tagName);
+      var t=e.target;canDrag=d.scrollTop<=0&&!t.closest('input,select,textarea,button,a');
       y0=e.touches[0].clientY;dy=0;d.style.transition='none';
     },{passive:true});
     d.addEventListener('touchmove',function(e){
       if(!canDrag||y0==null)return;dy=e.touches[0].clientY-y0;
-      if(dy>0){d.style.transform='translateY('+dy+'px)';if(e.cancelable)e.preventDefault()}
+      if(dy>12){d.style.transform='translateY('+(dy-12)+'px)';if(e.cancelable)e.preventDefault()}
     },{passive:false});
     d.addEventListener('touchend',function(){
       if(y0==null)return;d.style.transition='transform .2s ease-out';
