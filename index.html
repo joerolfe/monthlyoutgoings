@@ -110,6 +110,12 @@ button.primary:disabled{opacity:.6}
 .acct span{overflow-wrap:anywhere}
 .link{background:none;border:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px;padding:0 4px}
 
+.monzo .stats{margin-top:10px}
+.mlist{border:0;border-radius:0;background:none;margin-top:12px}
+.mlist li{min-height:44px;padding:0;justify-content:space-between;gap:12px}
+.mlist li:first-child{border-top:1px solid var(--line)}
+.mlist .muted{color:var(--muted)}
+
 .toast{position:fixed;left:50%;bottom:calc(16px + var(--sab));transform:translate(-50%,20px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:14px;background:var(--fg);color:var(--bg);border-radius:14px;padding:6px 6px 6px 16px;
   font-size:15px;max-width:calc(100% - 32px);transition:opacity .2s,transform .2s;z-index:10}
@@ -162,6 +168,16 @@ button.primary:disabled{opacity:.6}
     <button class="primary" type="submit">Add</button>
   </form>
   <button class="ghost" id="reset" type="button">Start new month (untick all)</button>
+
+  <section class="card monzo" id="monzo" hidden>
+    <div class="label">From Monzo this month</div>
+    <div class="stats">
+      <div class="stat"><span class="label">Out</span><b class="num" id="mOut">£0</b></div>
+      <div class="stat"><span class="label">In</span><b class="num" id="mIn">£0</b></div>
+      <div class="stat" id="mNetStat"><span class="label">Net</span><b class="num" id="mNet">£0</b></div>
+    </div>
+    <ul class="mlist" id="mList"></ul>
+  </section>
   <div class="acct" id="acct" hidden><span id="who"></span><button class="link" id="signOut" type="button">Sign out</button></div>
 </main>
 
@@ -251,15 +267,49 @@ button.primary:disabled{opacity:.6}
     channel=sb.channel('tracker-'+user.id)
       .on('postgres_changes',{event:'*',schema:'public',table:'trackers',filter:'user_id=eq.'+user.id},function(p){
         if(p.new&&p.new.data)applyRemote(p.new.data);
-      }).subscribe();
+      })
+      .on('postgres_changes',{event:'*',schema:'public',table:'monzo_transactions'},function(){loadMonzo()})
+      .subscribe();
+  }
+
+  /* ---------- Monzo (rows written by /api/monzo-webhook) ---------- */
+  function catName(c){c=(c||'other').replace(/_/g,' ');return c.charAt(0).toUpperCase()+c.slice(1)}
+  function loadMonzo(){
+    if(!user||!sb){$('monzo').hidden=true;return}
+    var d=new Date(),start=new Date(d.getFullYear(),d.getMonth(),1).toISOString();
+    sb.from('monzo_transactions').select('amount_pence,category,merchant_id:raw->merchant->>id')
+      .gte('created_at',start).then(function(r){
+        if(r.error){$('monzo').hidden=true;return}           // table not set up yet
+        var out=0,inc=0,cats={};
+        r.data.forEach(function(t){
+          var p=t.amount_pence;
+          if(p>0&&!t.merchant_id){inc+=p;return}              // salary, payments from people
+          var c=catName(t.category);cats[c]=(cats[c]||0)-p;   // spending; merchant refunds reduce their category
+          out-=p;
+        });
+        $('mOut').textContent=gbp.format(out/100);
+        $('mIn').textContent=gbp.format(inc/100);
+        $('mNet').textContent=gbp.format((inc-out)/100);
+        $('mNetStat').classList.toggle('neg',inc-out<0);
+        var list=$('mList');list.textContent='';
+        var names=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]});
+        if(!names.length){var e=document.createElement('li');e.className='muted';e.textContent='No Monzo spending yet this month.';list.appendChild(e)}
+        names.forEach(function(n){
+          var li=document.createElement('li');
+          var a=document.createElement('span');a.textContent=n;
+          var b=document.createElement('span');b.className='num';b.textContent=gbp.format(cats[n]/100);
+          li.append(a,b);list.appendChild(li);
+        });
+        $('monzo').hidden=false;
+      });
   }
   function setUser(u){
     var was=user&&user.id; user=u||null;
     $('auth').hidden=!configured||!!user;
     $('acct').hidden=!user; $('who').textContent=user?'Signed in as '+user.email:'';
-    if(!user){status(configured?'Not signed in':'On this device','');if(channel){sb.removeChannel(channel);channel=null}return}
+    if(!user){status(configured?'Not signed in':'On this device','');$('monzo').hidden=true;if(channel){sb.removeChannel(channel);channel=null}return}
     if(was===user.id)return;
-    status('Syncing…','busy');pull();subscribe();
+    status('Syncing…','busy');pull();subscribe();loadMonzo();
   }
 
   document.addEventListener('focusout',function(){setTimeout(function(){if(pendingRemote)applyRemote(pendingRemote)},0)});
@@ -267,7 +317,7 @@ button.primary:disabled{opacity:.6}
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState!=='visible')return;
     if(state.month!==thisMonth()){load(state);save();render()}
-    if(user){read(DIRTY)==='1'?push():pull()}
+    if(user){read(DIRTY)==='1'?push():pull();loadMonzo()}
   });
   window.addEventListener('online',function(){if(user){read(DIRTY)==='1'?push():pull()}});
   window.addEventListener('offline',function(){if(user)status('Offline','busy')});

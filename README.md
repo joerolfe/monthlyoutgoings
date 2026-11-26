@@ -30,3 +30,50 @@ Your phone keeps its own sign-in, separate from Safari, so sign in once inside t
 
 ## Updating
 When you push changes, the installed app picks them up the next time it opens. Change the cache name `V` in `sw.js` to force a refresh.
+
+## Monzo auto-import
+
+Monzo sends every new transaction to `/api/monzo-webhook`, a Vercel function that saves it to the `monzo_transactions` table. The tracker then shows "From Monzo this month": money out by category, plus money in. Your manual list stays as it is.
+
+**What gets saved:** card payments, Direct Debits, payments to and from people, and salary.
+**What's skipped:** pot transfers, top-ups, declined payments and zero-amount card checks.
+**How refunds count:** a refund from a merchant reduces that category's spending instead of counting as income.
+
+### 1. Database
+Open `supabase/monzo.sql`, replace `YOUR-USER-UUID` with your id from Supabase → Authentication → Users, then run the file in the SQL Editor.
+
+### 2. Vercel environment variables
+In Vercel, go to Project → Settings → Environment Variables, add these for Production, then redeploy:
+
+| Name | Value |
+|---|---|
+| `MONZO_WEBHOOK_SECRET` | A long random string. Generate one with `openssl rand -hex 32`. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Project Settings → API Keys → **secret** key (`sb_secret_...`), or the legacy `service_role` key |
+
+Never put these in the code or give them a `NEXT_PUBLIC_` prefix. Only the server function reads them.
+
+### 3. Register the webhook with Monzo
+You run this yourself. Get an access token from developers.monzo.com and approve it in the Monzo app. Then, in your terminal:
+
+```sh
+export MONZO_TOKEN='...'            # from developers.monzo.com
+export MONZO_WEBHOOK_SECRET='...'   # the same value you put in Vercel
+
+# Find your account id (acc_...)
+curl -s https://api.monzo.com/accounts -H "Authorization: Bearer $MONZO_TOKEN"
+export MONZO_ACCOUNT_ID='acc_...'
+
+# Register the webhook
+curl -X POST https://api.monzo.com/webhooks \
+  -H "Authorization: Bearer $MONZO_TOKEN" \
+  -d "account_id=$MONZO_ACCOUNT_ID" \
+  --data-urlencode "url=https://monthlyoutgoings.vercel.app/api/monzo-webhook?key=$MONZO_WEBHOOK_SECRET"
+
+# Check it, or remove it later
+curl -s "https://api.monzo.com/webhooks?account_id=$MONZO_ACCOUNT_ID" -H "Authorization: Bearer $MONZO_TOKEN"
+curl -X DELETE https://api.monzo.com/webhooks/<webhook_id> -H "Authorization: Bearer $MONZO_TOKEN"
+```
+
+### Limitations
+- Only transactions made after you register the webhook are imported.
+- Monzo sends nothing when a payment settles, so `settled` is usually empty. A few amounts, such as foreign or pre-authorised payments, can change at settlement and will keep their original value here.
