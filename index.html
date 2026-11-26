@@ -16,10 +16,11 @@
 <link rel="icon" href="icon-180.png">
 <style>
 /* Layout: one column sized for a 402pt-wide iPhone 17. Sticky bar under the Dynamic Island,
-   big "still to pay" card, tick list, add form, account. Safe areas respected on every edge. */
+   "still to pay" card, Bills / Calendar switch, then the chosen view. Bills tick themselves off
+   when a matching Monzo payment lands. Edit + link happen in bottom sheets. */
 :root{
   --bg:#f2f4f5; --surface:#ffffff; --fg:#14201f; --muted:#5d6e6c; --line:#dde3e3;
-  --accent:#0d7a6b; --accent-soft:#d9efeb; --warn:#a85a00; --warn-soft:#fbead2;
+  --accent:#0d7a6b; --accent-soft:#d9efeb; --warn:#a85a00; --warn-soft:#fbead2; --bad:#c2410c;
   --bar:rgba(242,244,245,.82);
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',sans-serif;
   --mono:ui-monospace,'SF Mono',Menlo,monospace;
@@ -29,11 +30,11 @@
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
   --bg:#0d1514; --surface:#172221; --fg:#e6efee; --muted:#93a8a5; --line:#273837;
-  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14;
+  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14; --bad:#ff8a5c;
   --bar:rgba(13,21,20,.82); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0d1514; --surface:#172221; --fg:#e6efee; --muted:#93a8a5; --line:#273837;
-  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14;
+  --accent:#3fc2ad; --accent-soft:#16342f; --warn:#f0b36a; --warn-soft:#3a2b14; --bad:#ff8a5c;
   --bar:rgba(13,21,20,.82); color-scheme:dark}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
@@ -42,8 +43,9 @@ body{margin:0;background:var(--bg);color:var(--fg);font:17px/1.4 var(--font);tou
 main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
 [hidden]{display:none!important}
+button{font:inherit;color:inherit}
 
-/* Sticky top bar: sits under the status bar / Dynamic Island */
+/* Sticky top bar */
 .top{position:sticky;top:0;z-index:5;margin:0 calc(-1 * max(16px,var(--sar))) 0 calc(-1 * max(16px,var(--sal)));
   padding:calc(var(--sat) + 10px) max(16px,var(--sar)) 10px max(16px,var(--sal));
   background:var(--bar);-webkit-backdrop-filter:saturate(1.6) blur(18px);backdrop-filter:saturate(1.6) blur(18px);
@@ -65,34 +67,41 @@ h1{font-size:22px;font-weight:700;margin:0;letter-spacing:-.01em}
 .stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
 .stat b{display:block;font-size:17px;font-weight:600;overflow-wrap:anywhere}
 .stat.neg b{color:var(--warn)}
-.income{display:flex;align-items:center;gap:8px;margin-top:14px}
+.next{margin-top:14px;padding-top:12px;border-top:1px solid var(--line);font-size:15px;color:var(--muted)}
+.next b{color:var(--fg);font-weight:600}
+.income{display:flex;align-items:center;gap:8px;margin-top:12px}
 .income label{flex:none}
-/* 16px+ on every input stops iOS Safari zooming in on focus */
-input{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;min-height:44px}
-input:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.income input{flex:1;width:100%;font-family:var(--mono);font-weight:600}
+input,select{font:inherit;font-size:17px;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0;min-height:44px;width:100%}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.income input{flex:1;font-family:var(--mono);font-weight:600}
+
+/* Bills / Calendar switch */
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--line);border-radius:12px;padding:3px;gap:3px}
+.seg button{border:0;background:none;border-radius:9px;min-height:38px;font-size:15px;font-weight:600;color:var(--muted);cursor:pointer}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 
 .note{background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:10px 14px;font-size:15px}
 ul{list-style:none;margin:0;padding:0;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden}
-li{display:flex;align-items:center;gap:6px;padding:0 4px 0 14px;min-height:54px;border-top:1px solid var(--line)}
+li{display:flex;align-items:center;gap:12px;padding:0 14px;min-height:58px;border-top:1px solid var(--line)}
 li:first-child{border-top:0}
-li label{flex:1;min-width:0;display:flex;align-items:center;gap:14px;cursor:pointer;align-self:stretch}
-li .name{overflow-wrap:anywhere;padding:8px 0}
-li.cat{background:var(--bg);min-height:36px;padding:0 14px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);justify-content:space-between}
+li.cat{background:var(--bg);min-height:36px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);justify-content:space-between}
 li input[type=checkbox]{appearance:none;-webkit-appearance:none;width:28px;height:28px;min-height:0;flex:none;border:2px solid var(--muted);border-radius:8px;padding:0;margin:0;background:transparent;cursor:pointer;display:grid;place-content:center;transition:background .15s,border-color .15s}
 li input[type=checkbox]:checked{background:var(--accent);border-color:var(--accent)}
 li input[type=checkbox]:checked::after{content:"";width:7px;height:13px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.row{flex:1;min-width:0;display:flex;align-items:center;gap:10px;background:none;border:0;padding:8px 0;text-align:left;cursor:pointer;align-self:stretch}
+.row .txt{flex:1;min-width:0}
+.row .name{display:block;overflow-wrap:anywhere}
+.row .meta{display:block;font-size:13px;color:var(--muted)}
+.row .meta.late{color:var(--bad)}
+.row .meta.monzo{color:var(--accent)}
+.row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.row .amt s{display:block;font-size:12px;color:var(--muted)}
 li.paid .name{text-decoration:line-through;color:var(--muted)}
 li.paid .amt{color:var(--muted)}
-.amt{width:96px;flex:none;text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;background:transparent;border-color:transparent;padding:8px 6px}
-.amt:focus{background:var(--bg);border-color:var(--line)}
-.del{flex:none;width:44px;height:44px;display:grid;place-content:center;background:none;border:0;color:var(--muted);font-size:24px;line-height:1;cursor:pointer;border-radius:10px}
-.del:active{color:var(--warn);background:var(--warn-soft)}
-.empty{justify-content:center;padding:20px 14px;color:var(--muted)}
+.empty{justify-content:center;color:var(--muted);text-align:center;padding:16px 14px}
 
-form.add{display:grid;grid-template-columns:minmax(0,1fr) 120px;gap:8px}
-form.add #newCat{grid-column:1/2}
-button.primary,.ghost{font:inherit;font-size:17px;font-weight:600;border-radius:12px;cursor:pointer;min-height:48px;padding:0 16px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button.primary,.ghost{font-size:17px;font-weight:600;border-radius:12px;cursor:pointer;min-height:48px;padding:0 16px}
 button.primary{background:var(--accent);color:#fff;border:0}
 :root[data-theme="dark"] button.primary{color:var(--bg)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) button.primary{color:var(--bg)}}
@@ -100,28 +109,71 @@ button.primary:active{filter:brightness(.92)}
 button.primary:disabled{opacity:.6}
 .ghost{background:none;border:1px solid var(--line);color:var(--muted)}
 .ghost:active{color:var(--fg);border-color:var(--muted)}
+.ghost.danger{color:var(--bad)}
+
+/* Calendar */
+.cal-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+.cal-head b{font-size:17px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;text-align:center}
+.cal .wd{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding-bottom:4px}
+.cal button{aspect-ratio:1/1.05;border:0;background:none;border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;cursor:pointer;font-size:15px;font-variant-numeric:tabular-nums}
+.cal button.has{background:var(--bg)}
+.cal button.today span:first-child{background:var(--fg);color:var(--bg);border-radius:50%;width:24px;height:24px;display:grid;place-content:center;margin-top:-3px}
+.cal button.sel{outline:2px solid var(--accent);outline-offset:-2px}
+.cal button.past:not(.today){color:var(--muted)}
+.dots{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;max-width:30px}
+.dots i{width:6px;height:6px;border-radius:50%;background:var(--muted)}
+.dots i.paid{background:var(--accent)} .dots i.late{background:var(--bad)} .dots i.tx{background:transparent;border:1.5px solid var(--muted);width:6px;height:6px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:5px}
+.day-title{font-size:15px;font-weight:600;margin:0 0 8px}
+.daylist li{min-height:50px}
+.txrow .row .amt{color:var(--fg)}
+
+/* Monzo card */
+.monzo .stats{margin-top:10px}
+.mlist{border:0;border-radius:0;background:none;margin-top:12px}
+.mlist li{min-height:50px;padding:0}
+.mlist li:first-child{border-top:1px solid var(--line)}
+.mlist .muted{color:var(--muted);font-size:15px;justify-content:flex-start}
+.hint{font-size:13px;color:var(--muted);margin:12px 0 0}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--accent);font-weight:600;font-size:15px;min-height:44px;display:flex;align-items:center}
+.catrow{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+
+/* Bottom sheets */
+dialog.sheet{position:fixed;inset:auto 0 0 0;margin:0 auto;width:100%;max-width:560px;max-height:88dvh;overflow:auto;border:0;border-radius:20px 20px 0 0;
+  background:var(--surface);color:var(--fg);padding:8px max(18px,var(--sal)) calc(18px + var(--sab));box-shadow:0 -8px 30px rgba(0,0,0,.2)}
+dialog.sheet::backdrop{background:rgba(0,0,0,.4)}
+dialog.sheet[open]{animation:up .22s ease-out}
+@keyframes up{from{transform:translateY(40px);opacity:.6}}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--line);margin:0 auto 12px}
+.sheet h2{font-size:20px;margin:0 0 14px}
+.sheet form{display:grid;gap:12px}
+.field{display:grid;gap:5px}
+.field small{color:var(--muted);font-size:13px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:0 12px;min-height:34px;font-size:14px;cursor:pointer}
+.chips button:active{border-color:var(--accent);color:var(--accent)}
+.linked{background:var(--accent-soft);color:var(--fg);border-radius:12px;padding:10px 12px;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.pick li{padding:0}
+.pick .row{padding:8px 14px}
 
 .auth h2{font-size:17px;margin:0 0 4px}
 .auth p{margin:0 0 12px;color:var(--muted);font-size:15px}
 .auth form{display:grid;gap:8px}
-.auth .row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .err{color:#d0453a;font-size:15px;margin:0}
 .acct{display:flex;justify-content:space-between;align-items:center;gap:12px;color:var(--muted);font-size:15px;flex-wrap:wrap}
 .acct span{overflow-wrap:anywhere}
-.link{background:none;border:0;color:var(--accent);font:inherit;font-weight:600;cursor:pointer;min-height:44px;padding:0 4px}
-
-.monzo .stats{margin-top:10px}
-.mlist{border:0;border-radius:0;background:none;margin-top:12px}
-.mlist li{min-height:44px;padding:0;justify-content:space-between;gap:12px}
-.mlist li:first-child{border-top:1px solid var(--line)}
-.mlist .muted{color:var(--muted)}
+.link{background:none;border:0;color:var(--accent);font-weight:600;cursor:pointer;min-height:44px;padding:0 4px}
 
 .toast{position:fixed;left:50%;bottom:calc(16px + var(--sab));transform:translate(-50%,20px);opacity:0;pointer-events:none;
   display:flex;align-items:center;gap:14px;background:var(--fg);color:var(--bg);border-radius:14px;padding:6px 6px 6px 16px;
   font-size:15px;max-width:calc(100% - 32px);transition:opacity .2s,transform .2s;z-index:10}
 .toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
-.toast button{background:none;border:0;color:var(--accent-soft);font:inherit;font-weight:700;min-height:40px;padding:0 12px;cursor:pointer}
-@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.toast button{background:none;border:0;color:var(--accent-soft);font-weight:700;min-height:40px;padding:0 12px;cursor:pointer}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -139,7 +191,7 @@ button.primary:disabled{opacity:.6}
       <input id="email" type="email" autocomplete="username" autocapitalize="off" placeholder="Email" required aria-label="Email">
       <input id="password" type="password" autocomplete="current-password" placeholder="Password (6+ characters)" minlength="6" required aria-label="Password">
       <p class="err" id="authErr" hidden></p>
-      <div class="row">
+      <div class="actions">
         <button class="primary" type="submit" id="signIn">Sign in</button>
         <button class="ghost" type="button" id="signUp">Create account</button>
       </div>
@@ -152,34 +204,102 @@ button.primary:disabled{opacity:.6}
     <div class="bar"><i id="progress"></i></div>
     <div class="stats">
       <div class="stat"><span class="label">Paid</span><b class="num" id="paid">£0</b></div>
-      <div class="stat"><span class="label">Total</span><b class="num" id="total">£0</b></div>
+      <div class="stat"><span class="label">Budget</span><b class="num" id="total">£0</b></div>
       <div class="stat" id="freeStat"><span class="label">Left over</span><b class="num" id="free">£0</b></div>
     </div>
+    <div class="next" id="next" hidden></div>
     <div class="income"><label class="label" for="income">Income £</label><input id="income" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="Optional"></div>
   </section>
 
-  <div class="note" id="note" hidden>These are example outgoings. Change the amounts, delete them and add your own.</div>
-  <ul id="list"></ul>
+  <div class="seg" role="tablist">
+    <button role="tab" id="tabBills" aria-selected="true">Bills</button>
+    <button role="tab" id="tabCal" aria-selected="false">Calendar</button>
+  </div>
 
-  <form class="add" id="add">
-    <input id="newName" placeholder="New outgoing (e.g. Gym)" required aria-label="Name" enterkeyhint="next">
-    <input id="newAmt" class="num" type="number" inputmode="decimal" min="0" step="0.01" placeholder="£" required aria-label="Amount" enterkeyhint="next">
-    <input id="newCat" list="cats" placeholder="Group" aria-label="Group" enterkeyhint="done"><datalist id="cats"></datalist>
-    <button class="primary" type="submit">Add</button>
-  </form>
-  <button class="ghost" id="reset" type="button">Start new month (untick all)</button>
-
-  <section class="card monzo" id="monzo" hidden>
-    <div class="label">From Monzo this month</div>
-    <div class="stats">
-      <div class="stat"><span class="label">Out</span><b class="num" id="mOut">£0</b></div>
-      <div class="stat"><span class="label">In</span><b class="num" id="mIn">£0</b></div>
-      <div class="stat" id="mNetStat"><span class="label">Net</span><b class="num" id="mNet">£0</b></div>
+  <!-- Bills view -->
+  <div id="viewBills" style="display:flex;flex-direction:column;gap:16px">
+    <div class="note" id="note" hidden>These are example outgoings. Change the amounts, delete them and add your own.</div>
+    <ul id="list"></ul>
+    <div class="actions">
+      <button class="primary" id="addBtn" type="button">Add bill</button>
+      <button class="ghost" id="reset" type="button">New month</button>
     </div>
-    <ul class="mlist" id="mList"></ul>
-  </section>
+
+    <section class="card monzo" id="monzo" hidden>
+      <div class="label">From Monzo this month</div>
+      <div class="stats">
+        <div class="stat"><span class="label">Out</span><b class="num" id="mOut">£0</b></div>
+        <div class="stat"><span class="label">In</span><b class="num" id="mIn">£0</b></div>
+        <div class="stat" id="mNetStat"><span class="label">Net</span><b class="num" id="mNet">£0</b></div>
+      </div>
+      <p class="hint" id="mHint">Payments below didn't match a bill. Tap one to link it, and it'll tick itself off every month.</p>
+      <ul class="mlist" id="mList"></ul>
+      <details><summary>Spending by category</summary><div id="mCats"></div></details>
+    </section>
+  </div>
+
+  <!-- Calendar view -->
+  <div id="viewCal" hidden style="flex-direction:column;gap:16px">
+    <section class="card">
+      <div class="cal-head"><b id="calTitle"></b><span class="label" id="calSub"></span></div>
+      <div class="cal" id="cal"></div>
+      <div class="legend">
+        <span><i class="dots"><i></i></i>Due</span>
+        <span><i class="dots"><i class="paid"></i></i>Paid</span>
+        <span><i class="dots"><i class="late"></i></i>Overdue</span>
+        <span><i class="dots"><i class="tx"></i></i>Monzo payment</span>
+      </div>
+    </section>
+    <section>
+      <p class="day-title" id="dayTitle"></p>
+      <ul class="daylist" id="dayList"></ul>
+    </section>
+    <section id="anyWrap">
+      <p class="day-title">No fixed date</p>
+      <ul class="daylist" id="anyList"></ul>
+    </section>
+  </div>
+
   <div class="acct" id="acct" hidden><span id="who"></span><button class="link" id="signOut" type="button">Sign out</button></div>
 </main>
+
+<!-- Edit / add bill -->
+<dialog class="sheet" id="editSheet" aria-labelledby="editTitle">
+  <div class="grab"></div>
+  <h2 id="editTitle" tabindex="-1" autofocus style="outline:none">Edit bill</h2>
+  <form id="editForm" method="dialog">
+    <div class="field"><label class="label" for="fName">Name</label><input id="fName" required autocapitalize="sentences"></div>
+    <div class="two">
+      <div class="field"><label class="label" for="fAmt">Amount £</label><input id="fAmt" class="num" type="number" inputmode="decimal" min="0" step="0.01" required></div>
+      <div class="field"><label class="label" for="fDay">Due day</label><select id="fDay"></select></div>
+    </div>
+    <div class="field"><label class="label" for="fCat">Group</label><input id="fCat" list="cats" placeholder="e.g. Car"><datalist id="cats"></datalist></div>
+    <div class="field">
+      <label class="label" for="fMatch">Match Monzo payments containing</label>
+      <input id="fMatch" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="e.g. aldi, lidl">
+      <small>Separate words with commas. When a Monzo payment's name contains one, this bill ticks itself off.</small>
+      <div class="chips" id="chips"></div>
+    </div>
+    <div class="linked" id="fLinked" hidden><span id="fLinkedTxt"></span><button class="link" type="button" id="fUnlink">Unlink</button></div>
+    <div class="actions">
+      <button class="primary" type="submit" value="save">Save</button>
+      <button class="ghost" type="button" id="fCancel">Cancel</button>
+    </div>
+    <button class="ghost danger" type="button" id="fDelete">Delete bill</button>
+  </form>
+</dialog>
+
+<!-- Link a Monzo payment to a bill -->
+<dialog class="sheet" id="linkSheet" aria-labelledby="linkTitle">
+  <div class="grab"></div>
+  <h2 id="linkTitle" tabindex="-1" autofocus style="outline:none">Which bill is this?</h2>
+  <p class="hint" id="linkTx" style="margin:-6px 0 12px"></p>
+  <ul class="pick" id="linkList"></ul>
+  <div class="actions" style="margin-top:12px">
+    <button class="ghost" type="button" id="linkNew">New bill from this</button>
+    <button class="ghost" type="button" id="linkCancel">Cancel</button>
+  </div>
+</dialog>
 
 <div class="toast" id="toast" role="status"><span id="toastMsg"></span><button id="undo" type="button">Undo</button></div>
 
@@ -187,21 +307,27 @@ button.primary:disabled{opacity:.6}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.js"></script>
 <script>
 (function(){
-  var KEY='outgoings-v1', DIRTY='outgoings-dirty';
+  var KEY='outgoings-v1', DIRTY='outgoings-dirty', TAB='outgoings-tab';
   var gbp=new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'});
   var thisMonth=function(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')};
   var uid=function(){return Math.random().toString(36).slice(2,9)};
   var $=function(id){return document.getElementById(id)};
-  var state={income:0,month:thisMonth(),example:false,updatedAt:0,items:[{id:'s0',cat:'Car',name:'Car insurance',amount:144,day:0,paid:false},{id:'s1',cat:'Car',name:'Fuel 1',amount:60,day:0,paid:false},{id:'s1b',cat:'Car',name:'Fuel 2',amount:60,day:0,paid:false},{id:'s2',cat:'Car',name:'Maintenance pot',amount:30,day:0,paid:false},{id:'s3',cat:'Subscriptions',name:'Apple',amount:19,day:0,paid:false},{id:'s4',cat:'Subscriptions',name:'Amazon',amount:7.5,day:0,paid:false},{id:'s5',cat:'Subscriptions',name:'SoundCloud',amount:6,day:0,paid:false},{id:'s6',cat:'Subscriptions',name:'Claude',amount:18,day:0,paid:false},{id:'s7',cat:'Subscriptions',name:'Gym',amount:28,day:0,paid:false},{id:'s8',cat:'Subscriptions',name:'Now TV',amount:28,day:0,paid:false},{id:'s9',cat:'Subscriptions',name:'Phone',amount:20,day:0,paid:false},{id:'s10',cat:'Everything else',name:'Haircut 1',amount:16,day:0,paid:false},{id:'s10b',cat:'Everything else',name:'Haircut 2',amount:16,day:0,paid:false},{id:'s11',cat:'Everything else',name:'Toiletries',amount:10,day:0,paid:false},{id:'s12',cat:'Everything else',name:'Food shop 1',amount:50,day:0,paid:false},{id:'s12b',cat:'Everything else',name:'Food shop 2',amount:50,day:0,paid:false},{id:'s12c',cat:'Everything else',name:'Food shop 3',amount:50,day:0,paid:false},{id:'s12d',cat:'Everything else',name:'Food shop 4',amount:50,day:0,paid:false},{id:'s13',cat:'Everything else',name:'Rent 1',amount:50,day:0,paid:false},{id:'s13b',cat:'Everything else',name:'Rent 2',amount:50,day:0,paid:false}]};
+  function el(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e}
+  // Starting matches/days are guesses to get going; edit any bill to change them.
+  var state={income:0,month:thisMonth(),example:false,updatedAt:0,ignoredTx:[],items:[{id:'s0',cat:'Car',name:'Car insurance',amount:144,day:0,paid:false,match:''},{id:'s1',cat:'Car',name:'Fuel 1',amount:60,day:0,paid:false,match:''},{id:'s1b',cat:'Car',name:'Fuel 2',amount:60,day:0,paid:false,match:''},{id:'s2',cat:'Car',name:'Maintenance pot',amount:30,day:0,paid:false,match:''},{id:'s3',cat:'Subscriptions',name:'Apple',amount:19,day:0,paid:false,match:''},{id:'s4',cat:'Subscriptions',name:'Amazon',amount:7.5,day:0,paid:false,match:''},{id:'s5',cat:'Subscriptions',name:'SoundCloud',amount:6,day:0,paid:false,match:''},{id:'s6',cat:'Subscriptions',name:'Claude',amount:18,day:0,paid:false,match:''},{id:'s7',cat:'Subscriptions',name:'Gym',amount:28,day:0,paid:false,match:''},{id:'s8',cat:'Subscriptions',name:'Now TV',amount:28,day:0,paid:false,match:''},{id:'s9',cat:'Subscriptions',name:'Phone',amount:20,day:0,paid:false,match:''},{id:'s10',cat:'Everything else',name:'Haircut 1',amount:16,day:0,paid:false,match:''},{id:'s10b',cat:'Everything else',name:'Haircut 2',amount:16,day:0,paid:false,match:''},{id:'s11',cat:'Everything else',name:'Toiletries',amount:10,day:0,paid:false,match:''},{id:'s12',cat:'Everything else',name:'Food shop 1',amount:50,day:0,paid:false,match:''},{id:'s12b',cat:'Everything else',name:'Food shop 2',amount:50,day:0,paid:false,match:''},{id:'s12c',cat:'Everything else',name:'Food shop 3',amount:50,day:0,paid:false,match:''},{id:'s12d',cat:'Everything else',name:'Food shop 4',amount:50,day:0,paid:false,match:''},{id:'s13',cat:'Everything else',name:'Rent 1',amount:50,day:0,paid:false,match:''},{id:'s13b',cat:'Everything else',name:'Rent 2',amount:50,day:0,paid:false,match:''}]};
+  // One-off defaults for match words on the starter bills, applied once to existing data.
+  var STARTER_MATCH={s3:'apple',s4:'amazon prime,prime video',s5:'soundcloud',s6:'claude,anthropic',s8:'now tv,nowtv',s12:'aldi',s12b:'aldi',s12c:'aldi',s12d:'aldi'};
 
   /* ---------- local storage ---------- */
   function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
   function read(k){try{return localStorage.getItem(k)}catch(e){return null}}
 
+  function clearPaid(i){i.paid=false;delete i.txId;delete i.paidAmount;delete i.paidOn}
   function load(raw){
     if(!raw||!Array.isArray(raw.items))return false;
     state=raw; if(typeof state.updatedAt!=='number')state.updatedAt=0;
     var changed=false;
+    if(!Array.isArray(state.ignoredTx)){state.ignoredTx=[];changed=true}
     function split(id,cat,base,n,each,ids){
       var k=state.items.findIndex(function(i){return i.id===id&&i.amount===each*n});
       if(k<0)return;
@@ -213,7 +339,11 @@ button.primary:disabled{opacity:.6}
     split('s10','Everything else','Haircut',2,16,['s10','s10b']);
     split('s13','Everything else','Rent',2,50,['s13','s13b']);
     split('s12','Everything else','Food shop',4,50,['s12','s12b','s12c','s12d']);
-    if(state.month!==thisMonth()){state.month=thisMonth();state.items.forEach(function(i){i.paid=false});changed=true}
+    if(!state.matchSeeded){
+      state.items.forEach(function(i){if(i.match==null)i.match=STARTER_MATCH[i.id]||''});
+      state.matchSeeded=true;changed=true;
+    }
+    if(state.month!==thisMonth()){state.month=thisMonth();state.items.forEach(clearPaid);state.ignoredTx=[];changed=true}
     return changed;
   }
 
@@ -243,14 +373,15 @@ button.primary:disabled{opacity:.6}
       status('Synced','ok');
     });
   }
+  function editing(){var a=document.activeElement;return (a&&a.tagName==='INPUT'&&a.form!==$('authForm'))||$('editSheet').open||$('linkSheet').open}
   function applyRemote(data,force){
-    var a=document.activeElement;
-    if(a&&a.tagName==='INPUT'&&a.form!==$('authForm')){pendingRemote=data;return} // don't yank the keyboard mid-edit
+    if(editing()){pendingRemote=data;return} // don't yank the keyboard or a sheet mid-edit
     pendingRemote=null;
     if(!data||(!force&&(data.updatedAt||0)<=state.updatedAt))return;
     var migrated=load(data);
-    store(KEY,JSON.stringify(state));render();
-    if(migrated)save();
+    store(KEY,JSON.stringify(state));
+    if(autoMatch()||migrated)save();
+    render();
   }
   function pull(){
     if(!user||!sb)return Promise.resolve();
@@ -271,56 +402,61 @@ button.primary:disabled{opacity:.6}
       .on('postgres_changes',{event:'*',schema:'public',table:'monzo_transactions'},function(){loadMonzo()})
       .subscribe();
   }
-
-  /* ---------- Monzo (rows written by /api/monzo-webhook) ---------- */
-  function catName(c){c=(c||'other').replace(/_/g,' ');return c.charAt(0).toUpperCase()+c.slice(1)}
-  function loadMonzo(){
-    if(!user||!sb){$('monzo').hidden=true;return}
-    var d=new Date(),start=new Date(d.getFullYear(),d.getMonth(),1).toISOString();
-    sb.from('monzo_transactions').select('amount_pence,category,merchant_id:raw->merchant->>id')
-      .gte('created_at',start).then(function(r){
-        if(r.error){$('monzo').hidden=true;return}           // table not set up yet
-        var out=0,inc=0,cats={};
-        r.data.forEach(function(t){
-          var p=t.amount_pence;
-          if(p>0&&!t.merchant_id){inc+=p;return}              // salary, payments from people
-          var c=catName(t.category);cats[c]=(cats[c]||0)-p;   // spending; merchant refunds reduce their category
-          out-=p;
-        });
-        $('mOut').textContent=gbp.format(out/100);
-        $('mIn').textContent=gbp.format(inc/100);
-        $('mNet').textContent=gbp.format((inc-out)/100);
-        $('mNetStat').classList.toggle('neg',inc-out<0);
-        var list=$('mList');list.textContent='';
-        var names=Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]});
-        if(!names.length){var e=document.createElement('li');e.className='muted';e.textContent='No Monzo spending yet this month.';list.appendChild(e)}
-        names.forEach(function(n){
-          var li=document.createElement('li');
-          var a=document.createElement('span');a.textContent=n;
-          var b=document.createElement('span');b.className='num';b.textContent=gbp.format(cats[n]/100);
-          li.append(a,b);list.appendChild(li);
-        });
-        $('monzo').hidden=false;
-      });
-  }
+  // Pull the list first, then Monzo, so auto-ticking never runs on a stale copy.
+  function refresh(){(read(DIRTY)==='1'?Promise.resolve(push()):pull()).then(loadMonzo)}
   function setUser(u){
     var was=user&&user.id; user=u||null;
     $('auth').hidden=!configured||!!user;
     $('acct').hidden=!user; $('who').textContent=user?'Signed in as '+user.email:'';
-    if(!user){status(configured?'Not signed in':'On this device','');$('monzo').hidden=true;if(channel){sb.removeChannel(channel);channel=null}return}
+    if(!user){status(configured?'Not signed in':'On this device','');monzoTx=[];renderMonzo();if(channel){sb.removeChannel(channel);channel=null}return}
     if(was===user.id)return;
-    status('Syncing…','busy');pull();subscribe();loadMonzo();
+    status('Syncing…','busy');pull().then(loadMonzo);subscribe();
   }
 
   document.addEventListener('focusout',function(){setTimeout(function(){if(pendingRemote)applyRemote(pendingRemote)},0)});
-  // iOS suspends sockets when the app is backgrounded, so catch up whenever it comes back.
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState!=='visible')return;
     if(state.month!==thisMonth()){load(state);save();render()}
-    if(user){read(DIRTY)==='1'?push():pull();loadMonzo()}
+    if(user)refresh();
   });
-  window.addEventListener('online',function(){if(user){read(DIRTY)==='1'?push():pull()}});
+  window.addEventListener('online',function(){if(user)refresh()});
   window.addEventListener('offline',function(){if(user)status('Offline','busy')});
+
+  /* ---------- Monzo: load this month, auto-tick matching bills ---------- */
+  var monzoTx=[];
+  function txName(t){return t.merchant_name||t.description||'Monzo payment'}
+  function words(item){return (item.match||'').split(',').map(function(w){return w.trim().toLowerCase()}).filter(Boolean)}
+  function loadMonzo(){
+    if(!user||!sb){monzoTx=[];renderMonzo();return}
+    var d=new Date(),start=new Date(d.getFullYear(),d.getMonth(),1).toISOString();
+    sb.from('monzo_transactions').select('id,amount_pence,category,merchant_name,description,created_at,merchant_id:raw->merchant->>id')
+      .gte('created_at',start).order('created_at',{ascending:true}).then(function(r){
+        if(r.error){monzoTx=null;renderMonzo();return}       // table not set up yet
+        monzoTx=r.data;
+        if(autoMatch()){save();haptic()}
+        render();
+      });
+  }
+  // Each spending transaction ticks the first unpaid bill whose match words appear in its name.
+  function autoMatch(){
+    if(!monzoTx||!monzoTx.length)return false;
+    var used={},changed=false;
+    state.items.forEach(function(i){if(i.txId)used[i.txId]=1});
+    (state.ignoredTx||[]).forEach(function(id){used[id]=1});
+    monzoTx.forEach(function(t){
+      if(t.amount_pence>=0||used[t.id])return;
+      var hay=(t.merchant_name||'')+' '+(t.description||'');hay=hay.toLowerCase();
+      var bill=state.items.find(function(i){return !i.paid&&words(i).some(function(w){return hay.indexOf(w)>=0})});
+      if(bill){markPaidBy(bill,t);used[t.id]=1;changed=true}
+    });
+    return changed;
+  }
+  function markPaidBy(bill,t){bill.paid=true;bill.txId=t.id;bill.paidAmount=-t.amount_pence/100;bill.paidOn=t.created_at.slice(0,10)}
+  function unlinkedSpend(){
+    if(!monzoTx)return[];
+    var used={};state.items.forEach(function(i){if(i.txId)used[i.txId]=1});
+    return monzoTx.filter(function(t){return t.amount_pence<0&&!used[t.id]});
+  }
 
   /* ---------- auth UI ---------- */
   function authErr(msg){$('authErr').textContent=msg||'';$('authErr').hidden=!msg}
@@ -357,68 +493,254 @@ button.primary:disabled{opacity:.6}
     undoData=null;$('toast').classList.remove('show');edited();
   };
 
+  /* ---------- dates ---------- */
+  function ord(n){if(n%100>=11&&n%100<=13)return 'th';return ({1:'st',2:'nd',3:'rd'})[n%10]||'th'}
+  function daysInMonth(){var d=new Date();return new Date(d.getFullYear(),d.getMonth()+1,0).getDate()}
+  function dueDay(i){return i.day?Math.min(i.day,daysInMonth()):0}       // "31st" falls on the last day in short months
+  function dayLabel(n){var d=new Date();d.setDate(n);return d.toLocaleDateString('en-GB',{weekday:'short'})+' '+n+ord(n)}
+  function shortDate(iso){var p=iso.split('-');return +p[2]+ord(+p[2])}
+
   /* ---------- render ---------- */
-  function edited(){state.example=false;save();render()}
+  function edited(){state.example=false;if(autoMatch())haptic();save();render()}
+  function paidValue(i){return i.paidAmount!=null?i.paidAmount:i.amount}
+  function metaFor(i){
+    var today=new Date().getDate(),dd=dueDay(i);
+    if(i.paid&&i.txId)return{t:'Paid by Monzo on the '+shortDate(i.paidOn),c:'monzo'};
+    if(i.paid)return{t:'Ticked off'+(dd?' · due '+dd+ord(dd):''),c:''};
+    if(dd&&dd<today)return{t:'Overdue · due '+dayLabel(dd),c:'late'};
+    if(dd===today)return{t:'Due today',c:'late'};
+    if(dd)return{t:'Due '+dayLabel(dd),c:''};
+    return{t:words(i).length?'Matches “'+words(i).join('”, “')+'”':'No fixed date',c:''};
+  }
+  function billRow(it){
+    var li=el('li');if(it.paid)li.classList.add('paid');
+    var cb=el('input');cb.type='checkbox';cb.checked=it.paid;cb.setAttribute('aria-label','Paid: '+it.name);
+    cb.onchange=function(){
+      if(cb.checked){it.paid=true}
+      else{if(it.txId)state.ignoredTx.push(it.txId);clearPaid(it)}   // unticking a Monzo match stops it re-ticking
+      haptic();save();render();
+    };
+    var row=el('button','row');row.type='button';row.setAttribute('aria-label','Edit '+it.name);
+    var txt=el('span','txt'),m=metaFor(it);
+    txt.append(el('span','name',it.name),el('span','meta '+m.c,m.t));
+    var amt=el('span','amt',gbp.format(it.paid?paidValue(it):it.amount));
+    if(it.paid&&it.paidAmount!=null&&Math.abs(it.paidAmount-it.amount)>=0.01)amt.appendChild(el('s',null,gbp.format(it.amount)));
+    row.append(txt,amt);row.onclick=function(){openEdit(it)};
+    li.append(cb,row);return li;
+  }
   function render(){
-    var total=0,paid=0;
-    state.items.forEach(function(i){total+=i.amount;if(i.paid)paid+=i.amount});
+    var total=0,paid=0,left=0;
+    state.items.forEach(function(i){total+=i.amount;if(i.paid)paid+=paidValue(i);else left+=i.amount});
     var free=state.income-total;
     $('month').textContent=new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'});
-    $('remaining').textContent=gbp.format(total-paid);
-    $('mini').textContent=gbp.format(total-paid);
+    $('remaining').textContent=gbp.format(left);
+    $('mini').textContent=gbp.format(left);
     $('paid').textContent=gbp.format(paid);
     $('total').textContent=gbp.format(total);
     $('free').textContent=gbp.format(free);
     $('freeStat').classList.toggle('neg',free<0);$('freeStat').hidden=!state.income;
-    $('progress').style.width=(total?Math.round(paid/total*100):0)+'%';
+    $('progress').style.width=(total?Math.min(100,Math.round((total-left)/total*100)):0)+'%';
     $('note').hidden=!state.example;
     if(document.activeElement!==$('income'))$('income').value=state.income||'';
+
+    // Next bill due
+    var today=new Date().getDate();
+    var upcoming=state.items.filter(function(i){return !i.paid&&dueDay(i)}).sort(function(a,b){return dueDay(a)-dueDay(b)});
+    var late=upcoming.filter(function(i){return dueDay(i)<today}),soon=upcoming.filter(function(i){return dueDay(i)>=today});
+    var nx=$('next');nx.textContent='';
+    if(late.length||soon.length){
+      if(soon.length){var s=soon[0];nx.append('Next: ',el('b',null,s.name+' '+gbp.format(s.amount)),' '+(dueDay(s)===today?'today':'on '+dayLabel(dueDay(s))))}
+      if(late.length)nx.append((soon.length?' · ':''),el('b',null,late.length+' overdue'));
+      nx.hidden=false;
+    }else nx.hidden=true;
+
+    // Bills list, grouped, sorted by due day within each group
     var list=$('list');list.textContent='';
-    if(!state.items.length){var e=document.createElement('li');e.className='empty';e.textContent='No outgoings yet. Add your first one below.';list.appendChild(e)}
+    if(!state.items.length)list.appendChild(el('li','empty','No bills yet. Tap “Add bill” to start.'));
     var cats=[];state.items.forEach(function(i){if(cats.indexOf(i.cat)<0)cats.push(i.cat)});
-    var dl=$('cats');dl.textContent='';cats.forEach(function(c){var o=document.createElement('option');o.value=c;dl.appendChild(o)});
+    var dl=$('cats');dl.textContent='';cats.forEach(function(c){var o=el('option');o.value=c;dl.appendChild(o)});
     cats.forEach(function(cat){
       var group=state.items.filter(function(i){return i.cat===cat});
-      var left=0;group.forEach(function(i){if(!i.paid)left+=i.amount});
-      var h=document.createElement('li');h.className='cat';
-      var hn=document.createElement('span');hn.textContent=cat;
-      var hv=document.createElement('span');hv.className='num';hv.textContent=gbp.format(left)+' left';
-      h.append(hn,hv);list.appendChild(h);
-      group.forEach(function(it){
-        var li=document.createElement('li');if(it.paid)li.className='paid';
-        var lab=document.createElement('label');
-        var cb=document.createElement('input');cb.type='checkbox';cb.checked=it.paid;cb.setAttribute('aria-label','Paid: '+it.name);
-        cb.onchange=function(){it.paid=cb.checked;haptic();save();render()};
-        var n=document.createElement('span');n.className='name';n.textContent=it.name;
-        lab.append(cb,n);
-        var amt=document.createElement('input');amt.className='amt';amt.type='number';amt.inputMode='decimal';amt.step='0.01';amt.min='0';amt.value=it.amount;amt.enterKeyHint='done';amt.setAttribute('aria-label','Amount for '+it.name);
-        amt.onchange=function(){var v=parseFloat(amt.value);if(isNaN(v)||v<0)v=0;it.amount=v;edited()};
-        amt.onkeydown=function(e){if(e.key==='Enter')amt.blur()};
-        var del=document.createElement('button');del.className='del';del.type='button';del.textContent='×';del.setAttribute('aria-label','Delete '+it.name);
-        del.onclick=function(){
-          var idx=state.items.findIndex(function(x){return x.id===it.id});if(idx<0)return;
-          var removed=state.items.splice(idx,1)[0];haptic();edited();toast('Deleted '+removed.name,{item:removed,index:idx});
-        };
-        li.append(lab,amt,del);list.appendChild(li);
-      });
+      group=group.slice().sort(function(a,b){return (dueDay(a)||99)-(dueDay(b)||99)});
+      var l=0;group.forEach(function(i){if(!i.paid)l+=i.amount});
+      var h=el('li','cat');h.append(el('span',null,cat),el('span','num',gbp.format(l)+' left'));list.appendChild(h);
+      group.forEach(function(it){list.appendChild(billRow(it))});
     });
+    renderMonzo();renderCal();
   }
 
-  $('income').oninput=function(){var v=parseFloat($('income').value);state.income=isNaN(v)?0:v;save();render()};
-  $('add').onsubmit=function(ev){
+  function renderMonzo(){
+    if(!user||monzoTx===null){$('monzo').hidden=true;return}
+    var out=0,inc=0,cats={};
+    monzoTx.forEach(function(t){
+      var p=t.amount_pence;
+      if(p>0&&!t.merchant_id){inc+=p;return}
+      var c=(t.category||'other').replace(/_/g,' ');c=c.charAt(0).toUpperCase()+c.slice(1);
+      cats[c]=(cats[c]||0)-p;out-=p;
+    });
+    $('mOut').textContent=gbp.format(out/100);$('mIn').textContent=gbp.format(inc/100);
+    $('mNet').textContent=gbp.format((inc-out)/100);$('mNetStat').classList.toggle('neg',inc-out<0);
+    var list=$('mList');list.textContent='';
+    var un=unlinkedSpend().slice().reverse();
+    $('mHint').hidden=!un.length;
+    if(!un.length)list.appendChild(el('li','muted',monzoTx.length?'Every Monzo payment this month is matched to a bill.':'No Monzo payments yet this month.'));
+    un.forEach(function(t){
+      var li=el('li','txrow');
+      var row=el('button','row');row.type='button';
+      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta',shortDate(t.created_at.slice(0,10))+' · tap to link to a bill'));
+      row.append(txt,el('span','amt',gbp.format(-t.amount_pence/100)));
+      row.onclick=function(){openLink(t)};li.appendChild(row);list.appendChild(li);
+    });
+    var mc=$('mCats');mc.textContent='';
+    Object.keys(cats).sort(function(a,b){return cats[b]-cats[a]}).forEach(function(n){
+      var r=el('div','catrow');r.append(el('span',null,n),el('span','num',gbp.format(cats[n]/100)));mc.appendChild(r);
+    });
+    $('monzo').hidden=false;
+  }
+
+  /* ---------- calendar ---------- */
+  var selDay=new Date().getDate();
+  function renderCal(){
+    var now=new Date(),y=now.getFullYear(),m=now.getMonth(),today=now.getDate(),n=daysInMonth();
+    $('calTitle').textContent=now.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+    var dueCount=state.items.filter(function(i){return dueDay(i)}).length;
+    $('calSub').textContent=dueCount?dueCount+' dated bills':'Set due days in each bill';
+    var txByDay={};(monzoTx||[]).forEach(function(t){if(t.amount_pence<0){var d=new Date(t.created_at).getDate();(txByDay[d]=txByDay[d]||[]).push(t)}});
+    var cal=$('cal');cal.textContent='';
+    ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(function(w){cal.appendChild(el('div','wd',w.charAt(0)))});
+    var lead=(new Date(y,m,1).getDay()+6)%7;
+    for(var k=0;k<lead;k++)cal.appendChild(el('div'));
+    for(var d=1;d<=n;d++)(function(d){
+      var bills=state.items.filter(function(i){return dueDay(i)===d});
+      var b=el('button');b.type='button';
+      if(bills.length||txByDay[d])b.classList.add('has');
+      if(d===today)b.classList.add('today');if(d<today)b.classList.add('past');if(d===selDay)b.classList.add('sel');
+      b.appendChild(el('span',null,d));
+      var dots=el('span','dots');
+      bills.slice(0,4).forEach(function(i){dots.appendChild(el('i',i.paid?'paid':(d<today?'late':'')))});
+      if(txByDay[d]&&bills.length<4)dots.appendChild(el('i','tx'));
+      b.appendChild(dots);
+      b.setAttribute('aria-label',dayLabel(d)+': '+(bills.length?bills.map(function(i){return i.name}).join(', '):'nothing due'));
+      b.onclick=function(){selDay=d;renderCal()};
+      cal.appendChild(b);
+    })(d);
+
+    // Selected day
+    $('dayTitle').textContent=(selDay===today?'Today, ':'')+dayLabel(selDay);
+    var dl=$('dayList');dl.textContent='';
+    var bills=state.items.filter(function(i){return dueDay(i)===selDay});
+    bills.forEach(function(it){dl.appendChild(billRow(it))});
+    (txByDay[selDay]||[]).forEach(function(t){
+      var li=el('li','txrow'),row=el('button','row');row.type='button';
+      var linked=state.items.find(function(i){return i.txId===t.id});
+      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta'+(linked?' monzo':''),linked?'Monzo · paid '+linked.name:'Monzo payment · tap to link'));
+      row.append(txt,el('span','amt',gbp.format(-t.amount_pence/100)));
+      row.onclick=function(){linked?openEdit(linked):openLink(t)};li.appendChild(row);dl.appendChild(li);
+    });
+    if(!dl.children.length)dl.appendChild(el('li','empty','Nothing due or paid on this day.'));
+
+    var any=state.items.filter(function(i){return !dueDay(i)});
+    $('anyWrap').hidden=!any.length;
+    var al=$('anyList');al.textContent='';any.forEach(function(it){al.appendChild(billRow(it))});
+  }
+
+  /* ---------- tabs ---------- */
+  function showTab(t){
+    var cal=t==='cal';
+    $('tabBills').setAttribute('aria-selected',!cal);$('tabCal').setAttribute('aria-selected',cal);
+    $('viewBills').style.display=cal?'none':'flex';$('viewCal').hidden=!cal;$('viewCal').style.display=cal?'flex':'none';
+    store(TAB,t);
+  }
+  $('tabBills').onclick=function(){showTab('bills')};
+  $('tabCal').onclick=function(){selDay=new Date().getDate();renderCal();showTab('cal')};
+
+  /* ---------- edit sheet ---------- */
+  function outside(e,d){if(e.target!==d)return false;var r=d.getBoundingClientRect();return e.clientY<r.top||e.clientY>r.bottom||e.clientX<r.left||e.clientX>r.right}
+  var editing_=null;
+  (function(){var s=$('fDay');var o=el('option',null,'No fixed date');o.value='0';s.appendChild(o);
+    for(var d=1;d<=31;d++){o=el('option',null,d+ord(d)+' of the month');o.value=String(d);s.appendChild(o)}})();
+  function openEdit(it,prefill){
+    editing_=it||null;
+    $('editTitle').textContent=it?'Edit bill':'Add bill';
+    var src=it||prefill||{};
+    $('fName').value=src.name||'';$('fAmt').value=src.amount!=null?src.amount:'';
+    $('fDay').value=String(src.day||0);$('fCat').value=src.cat||'';$('fMatch').value=src.match||'';
+    $('fDelete').hidden=!it;
+    var linkedTx=it&&it.txId;
+    $('fLinked').hidden=!linkedTx;
+    if(linkedTx)$('fLinkedTxt').textContent='Paid by Monzo: '+gbp.format(it.paidAmount)+' on the '+shortDate(it.paidOn);
+    // Recent Monzo merchant names as one-tap match words
+    var chips=$('chips');chips.textContent='';var seen={};
+    (monzoTx||[]).slice().reverse().forEach(function(t){
+      if(t.amount_pence>=0)return;var w=(t.merchant_name||t.description||'').trim().toLowerCase();
+      if(!w||seen[w]||Object.keys(seen).length>=10)return;seen[w]=1;
+      var c=el('button',null,'+ '+w);c.type='button';
+      c.onclick=function(){var cur=$('fMatch').value.split(',').map(function(s){return s.trim()}).filter(Boolean);if(cur.indexOf(w)<0)cur.push(w);$('fMatch').value=cur.join(', ')};
+      chips.appendChild(c);
+    });
+    $('editSheet').showModal();
+  }
+  $('editForm').onsubmit=function(ev){
     ev.preventDefault();
-    var a=parseFloat($('newAmt').value);
-    if(isNaN(a)||!$('newName').value.trim())return;
-    if(state.example){state.items=[]}
-    state.items.push({id:uid(),name:$('newName').value.trim(),amount:a,day:0,cat:$('newCat').value.trim()||'Other',paid:false});
-    $('add').reset();haptic();edited();$('newName').blur();
+    var name=$('fName').value.trim(),a=parseFloat($('fAmt').value);
+    if(!name||isNaN(a)||a<0)return;
+    var data={name:name,amount:a,day:+$('fDay').value,cat:$('fCat').value.trim()||'Other',match:$('fMatch').value.split(',').map(function(s){return s.trim().toLowerCase()}).filter(Boolean).join(', ')};
+    if(editing_)Object.assign(editing_,data);
+    else{if(state.example)state.items=[];var it=Object.assign({id:uid(),paid:false},data);state.items.push(it);if(pendingLink){markPaidBy(it,pendingLink)}}
+    pendingLink=null;
+    $('editSheet').close();haptic();edited();
   };
+  $('fCancel').onclick=function(){pendingLink=null;$('editSheet').close()};
+  $('fUnlink').onclick=function(){if(!editing_)return;state.ignoredTx.push(editing_.txId);clearPaid(editing_);$('fLinked').hidden=true;save();render()};
+  $('fDelete').onclick=function(){
+    var it=editing_;if(!it)return;
+    var idx=state.items.indexOf(it);state.items.splice(idx,1);
+    $('editSheet').close();haptic();edited();toast('Deleted '+it.name,{item:it,index:idx});
+  };
+  $('editSheet').addEventListener('close',function(){if(pendingRemote)applyRemote(pendingRemote)});
+  $('editSheet').addEventListener('click',function(e){if(outside(e,$('editSheet')))$('editSheet').close()}); // tap backdrop
+
+  /* ---------- link sheet: teach a bill a new match word ---------- */
+  var linking=null,pendingLink=null;
+  function openLink(t){
+    linking=t;
+    $('linkTx').textContent=txName(t)+' · '+gbp.format(-t.amount_pence/100)+' on the '+shortDate(t.created_at.slice(0,10));
+    var ul=$('linkList');ul.textContent='';
+    var bills=state.items.filter(function(i){return !i.txId}).sort(function(a,b){return (a.paid-b.paid)});
+    if(!bills.length)ul.appendChild(el('li','empty','Every bill is already matched this month.'));
+    bills.forEach(function(it){
+      var li=el('li'),row=el('button','row');row.type='button';
+      var txt=el('span','txt');txt.append(el('span','name',it.name),el('span','meta',it.cat+(it.paid?' · ticked off':'')));
+      row.append(txt,el('span','amt',gbp.format(it.amount)));
+      row.onclick=function(){
+        var w=(t.merchant_name||t.description||'').trim().toLowerCase();
+        if(w&&words(it).indexOf(w)<0)it.match=words(it).concat([w]).join(', ');
+        // Same merchant also covers sibling bills ("Food shop 1..4") so future visits tick the next one.
+        var base=it.name.replace(/\s*\d+$/,'');
+        if(w)state.items.forEach(function(o){if(o!==it&&o.name.replace(/\s*\d+$/,'')===base&&base!==it.name&&words(o).indexOf(w)<0)o.match=words(o).concat([w]).join(', ')});
+        markPaidBy(it,t);state.ignoredTx=state.ignoredTx.filter(function(id){return id!==t.id});
+        $('linkSheet').close();haptic();edited();toast(it.name+' paid · future “'+w+'” payments will match',null);
+      };
+      li.appendChild(row);ul.appendChild(li);
+    });
+    $('linkSheet').showModal();
+  }
+  $('linkCancel').onclick=function(){$('linkSheet').close()};
+  $('linkNew').onclick=function(){
+    var t=linking;$('linkSheet').close();pendingLink=t;
+    var w=(t.merchant_name||t.description||'').trim();
+    openEdit(null,{name:w,amount:-t.amount_pence/100,day:new Date(t.created_at).getDate(),match:w.toLowerCase(),cat:''});
+  };
+  $('linkSheet').addEventListener('close',function(){if(pendingRemote&&!$('editSheet').open)applyRemote(pendingRemote)});
+  $('linkSheet').addEventListener('click',function(e){if(outside(e,$('linkSheet')))$('linkSheet').close()});
+
+  $('income').oninput=function(){var v=parseFloat($('income').value);state.income=isNaN(v)?0:v;save();render()};
+  $('addBtn').onclick=function(){pendingLink=null;openEdit(null)};
   $('reset').onclick=function(){
-    state.items.forEach(function(i){i.paid=false});state.month=thisMonth();haptic();save();render();
-    toast('All unticked for a new month',null);
+    state.items.forEach(clearPaid);state.ignoredTx=[];state.month=thisMonth();
+    autoMatch();haptic();save();render();toast('Unticked everything for a new month',null);
   };
 
-  /* Compact total in the top bar once the big card scrolls away */
   if('IntersectionObserver' in window){
     new IntersectionObserver(function(es){$('top').classList.toggle('scrolled',!es[0].isIntersecting)},{rootMargin:'-80px 0px 0px 0px'}).observe($('remaining'));
   }
@@ -426,6 +748,7 @@ button.primary:disabled{opacity:.6}
   /* ---------- boot ---------- */
   try{var raw=read(KEY);if(raw&&load(JSON.parse(raw)))store(KEY,JSON.stringify(state))}catch(e){}
   render();
+  showTab(read(TAB)==='cal'?'cal':'bills');
   setUser(null);
   if(sb){
     sb.auth.getSession().then(function(r){setUser(r.data.session&&r.data.session.user)});
