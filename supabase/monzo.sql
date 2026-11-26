@@ -1,5 +1,5 @@
 -- Run once in Supabase: Dashboard → SQL Editor → New query → paste → Run.
--- First replace YOUR-USER-UUID below with your id from Authentication → Users (it is not a secret).
+-- Sign up in the app first: read access is pinned to the first account created in this project (yours).
 create table if not exists public.monzo_transactions (
   id            text primary key,          -- Monzo transaction id (tx_...)
   amount_pence  integer not null,          -- negative = money out
@@ -18,9 +18,15 @@ create index if not exists monzo_transactions_created_at on public.monzo_transac
 alter table public.monzo_transactions enable row level security;
 
 drop policy if exists "owner can read" on public.monzo_transactions;
-create policy "owner can read" on public.monzo_transactions
-  for select to authenticated
-  using (auth.uid() = 'YOUR-USER-UUID'::uuid);
+do $$
+declare owner_id uuid;
+begin
+  select id into owner_id from auth.users order by created_at limit 1;
+  if owner_id is null then raise exception 'No user yet: create your account in the app first'; end if;
+  execute format(
+    'create policy "owner can read" on public.monzo_transactions for select to authenticated using (auth.uid() = %L::uuid)',
+    owner_id);
+end $$;
 
 -- Live updates in the tracker when a new transaction lands.
 do $$ begin

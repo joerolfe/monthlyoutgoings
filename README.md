@@ -40,7 +40,7 @@ Monzo sends every new transaction to `/api/monzo-webhook`, a Vercel function tha
 **How refunds count:** a refund from a merchant reduces that category's spending instead of counting as income.
 
 ### 1. Database
-Open `supabase/monzo.sql`, replace `YOUR-USER-UUID` with your id from Supabase → Authentication → Users, then run the file in the SQL Editor.
+Create your account in the app first, then run `supabase/monzo.sql` in the SQL Editor. It gives read access to that first account automatically.
 
 ### 2. Vercel environment variables
 In Vercel, go to Project → Settings → Environment Variables, add these for Production, then redeploy:
