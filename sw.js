@@ -1,5 +1,5 @@
 // Offline shell: serve from cache instantly, refresh the cache in the background.
-const V = 'outgoings-v12';
+const V = 'outgoings-v13';
 const SUPA = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.50.0/dist/umd/supabase.js';
 const SHELL = ['./', './index.html', './config.js', './manifest.webmanifest', './icon-180.png', './icon-512.png', SUPA];
 
