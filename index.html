@@ -178,6 +178,11 @@ th{color:var(--muted);font-weight:500}
 td{font-family:var(--mono);font-variant-numeric:tabular-nums}
 td:first-child{font-family:var(--font)}
 .note-sm{font-size:13px;color:var(--muted);margin:10px 0 0}
+.wk-head{display:flex;align-items:center;gap:4px;margin:-8px -10px 0}
+.wk-head .icon-btn{color:var(--accent)} .wk-head .icon-btn:disabled{color:var(--faint);opacity:.4;cursor:default}
+.wk-mid{flex:1;min-width:0;border:0;background:none;text-align:center;cursor:pointer;padding:4px 0}
+.wk-mid span{display:block;font-size:13px;color:var(--muted);margin-top:1px}
+.chart-wrap .sel-bar{opacity:1}
 .wk-tiles{margin-top:14px} .wk-tiles .tile{background:var(--bg);padding:12px 14px}
 .wk-tiles.one{grid-template-columns:1fr}
 .sub-sm{display:block;font-size:12px;color:var(--muted);margin-top:2px}
@@ -310,11 +315,16 @@ li:has(>.row:active) .row{background:none}
   <!-- ============ SPENDING ============ -->
   <div class="view" id="viewSpend" hidden>
     <section class="card" id="week">
-      <div class="section-head" style="margin:0"><h2 class="section-title">This week</h2><span id="wkRange"></span></div>
-      <div class="tiles wk-tiles">
-        <div class="tile" id="wkSpentTile"><span class="label">Spent so far</span><b class="num" id="wkSpent">£0</b><span class="sub-sm" id="wkVs"></span></div>
-        <div class="tile"><span class="label">Needed for bills</span><b class="num gold" id="wkNeed">£0</b><span class="sub-sm" id="wkNeedSub"></span></div>
+      <div class="wk-head">
+        <button class="icon-btn" id="wkPrev" type="button" aria-label="Previous week"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2 2 8l6 6"/></svg></button>
+        <button class="wk-mid" id="wkNow" type="button" aria-label="Back to this week"><h2 class="section-title" id="wkTitle">This week</h2><span id="wkRange"></span></button>
+        <button class="icon-btn" id="wkNextBtn" type="button" aria-label="Next week"><svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m2 2 6 6-6 6"/></svg></button>
       </div>
+      <div class="tiles wk-tiles">
+        <div class="tile" id="wkSpentTile"><span class="label" id="wkSpentLbl">Spent so far</span><b class="num" id="wkSpent">£0</b><span class="sub-sm" id="wkVs"></span></div>
+        <div class="tile"><span class="label" id="wkNeedLbl">Needed for bills</span><b class="num gold" id="wkNeed">£0</b><span class="sub-sm" id="wkNeedSub"></span></div>
+      </div>
+      <h3 class="mini-title" id="wkListTitle" hidden></h3>
       <ul class="plain wk-list" id="wkBills"></ul>
       <p class="note-sm" id="wkNext"></p>
       <div id="wkChartBox">
@@ -844,84 +854,113 @@ li:has(>.row:active) .row{background:none}
     }
     return out;
   }
+  // Week shown in the card: 0 = this week, -1 = last week, +1 = next week. Back as far as Monzo history goes, forward 4 weeks.
+  var wkOff=0,WK_AHEAD=4;
+  function wkFloor(){var now=weekStart(new Date()),first=histTx.length?weekStart(new Date(histTx[0].created_at)):now;
+    return Math.min(0,-Math.round((now-first)/6048e5))}
+  function setWeek(n){n=Math.max(wkFloor(),Math.min(WK_AHEAD,n));if(n===wkOff)return;wkOff=n;haptic();renderWeek(!!user&&monzoTx!==null)}
+  $('wkPrev').onclick=function(){setWeek(wkOff-1)};
+  $('wkNextBtn').onclick=function(){setWeek(wkOff+1)};
+  $('wkNow').onclick=function(){setWeek(0)};
+  // Every bill scheduled in a week, ignoring whether it's been ticked (for past weeks).
+  function scheduledInWeek(start){
+    var out=[];
+    for(var k=0;k<7;k++){var d=addDays(start,k),dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+      state.items.forEach(function(i){if(i.day&&Math.min(i.day,dim)===d.getDate())out.push({i:i,d:d})})}
+    return out;
+  }
+  function spentIn(s,e){var v=0;histTx.forEach(function(t){var d=new Date(t.created_at);if(t.amount_pence<0&&d>=s&&d<e)v-=t.amount_pence});return v/100}
   function renderWeek(on){
-    var now=new Date(),ws=weekStart(now),we=addDays(ws,6),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+    var now=new Date(),thisWs=weekStart(now),ws=addDays(thisWs,7*wkOff),we=addDays(ws,6),today=new Date(now.getFullYear(),now.getMonth(),now.getDate());
     var md=function(d){return d.getDate()+' '+d.toLocaleDateString('en-GB',{month:'short'})};
-    $('wkRange').textContent=md(ws)+' – '+md(we);
-    // Bills: what's left to pay this week (from today), plus anything overdue
-    var due=billsInWeek(ws).filter(function(b){return b.d>=today}),need=0;
-    due.forEach(function(b){need+=b.i.amount});
-    var late=state.items.filter(function(i){return !i.paid&&dueDay(i)&&dueDay(i)<now.getDate()}),lateSum=0;
-    late.forEach(function(i){lateSum+=i.amount});
-    $('wkNeed').textContent=gbp.format(need);
-    $('wkNeedSub').textContent=due.length?due.length+(due.length===1?' bill':' bills')+' left to come out':'Nothing else due';
+    var past=wkOff<0,future=wkOff>0;
+    $('wkTitle').textContent=wkOff===0?'This week':wkOff===-1?'Last week':wkOff===1?'Next week':(past?-wkOff+' weeks ago':'In '+wkOff+' weeks');
+    $('wkRange').textContent=md(ws)+' – '+md(we)+(wkOff?' · tap for this week':'');
+    $('wkNow').disabled=!wkOff;
+    $('wkPrev').disabled=wkOff<=wkFloor();$('wkNextBtn').disabled=wkOff>=WK_AHEAD;
+
     var ul=$('wkBills');ul.textContent='';
-    due.forEach(function(b){
+    function billLine(b,meta){
       var li=el('li','plain-li'),row=el('button','row');row.type='button';
-      var txt=el('span','txt');txt.append(el('span','name',b.i.name),el('span','meta',(b.d.getTime()===today.getTime()?'Today':fmtDay(b.d))+(b.next?' · next month':'')));
+      var txt=el('span','txt');txt.append(el('span','name',b.i.name),el('span','meta',meta));
       row.append(billLogo(b.i),txt,el('span','amt',gbp.format(b.i.amount)));row.insertAdjacentHTML('beforeend',CHEV);
       row.onclick=function(){openEdit(b.i)};li.appendChild(row);ul.appendChild(li);
-    });
-    if(lateSum){var li=el('li','plain-li'),row=el('button','row');row.type='button';
-      var txt=el('span','txt');txt.append(el('span','name','Overdue from earlier'),el('span','meta late',late.length+(late.length===1?' bill':' bills')+' not ticked off · tap to see'));
-      var lg=el('span','logo txt-l','!');lg.style.color='var(--bad)';
-      row.append(lg,txt,el('span','amt',gbp.format(lateSum)));row.insertAdjacentHTML('beforeend',CHEV);
-      row.onclick=function(){showTab('bills')};li.appendChild(row);ul.appendChild(li)}
+    }
+    var lt=$('wkListTitle');lt.hidden=true;
+    if(past){
+      // Looking back: what the bills came to, and the biggest payments that week
+      var sch=scheduledInWeek(ws),bs=0;sch.forEach(function(b){bs+=b.i.amount});
+      $('wkNeedLbl').textContent='Bills that week';$('wkNeed').textContent=gbp.format(bs);
+      $('wkNeedSub').textContent=sch.length?sch.length+(sch.length===1?' bill':' bills')+' due':'None due';
+      if(on){
+        var txs=histTx.filter(function(t){var d=new Date(t.created_at);return t.amount_pence<0&&d>=ws&&d<addDays(ws,7)})
+          .sort(function(a,b){return a.amount_pence-b.amount_pence});
+        if(txs.length){lt.hidden=false;lt.textContent=txs.length>8?'Biggest payments ('+txs.length+' in total)':'Payments'}
+        txs.slice(0,8).forEach(function(t){
+          var li=el('li','plain-li'),row=el('div','row');row.style.cursor='default';
+          var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta',fmtDay(new Date(t.created_at))));
+          row.append(txLogo(t),txt,el('span','amt',gbp.format(-t.amount_pence/100)));li.appendChild(row);ul.appendChild(li);
+        });
+      }
+    }else{
+      // This week (from today) or a week ahead: unpaid bills still to come out
+      var due=billsInWeek(ws).filter(function(b){return b.d>=today}),need=0;due.forEach(function(b){need+=b.i.amount});
+      $('wkNeedLbl').textContent='Needed for bills';$('wkNeed').textContent=gbp.format(need);
+      $('wkNeedSub').textContent=due.length?due.length+(due.length===1?' bill':' bills')+(future?' due':' left to come out'):(future?'No bills due':'Nothing else due');
+      due.forEach(function(b){billLine(b,(b.d.getTime()===today.getTime()?'Today':fmtDay(b.d))+(b.next&&!future?' · next month':''))});
+      var late=wkOff===0?state.items.filter(function(i){return !i.paid&&dueDay(i)&&dueDay(i)<now.getDate()}):[],lateSum=0;
+      late.forEach(function(i){lateSum+=i.amount});
+      if(lateSum){var li=el('li','plain-li'),row=el('button','row');row.type='button';
+        var txt=el('span','txt');txt.append(el('span','name','Overdue from earlier'),el('span','meta late',late.length+(late.length===1?' bill':' bills')+' not ticked off · tap to see'));
+        var lg=el('span','logo txt-l','!');lg.style.color='var(--bad)';
+        row.append(lg,txt,el('span','amt',gbp.format(lateSum)));row.insertAdjacentHTML('beforeend',CHEV);
+        row.onclick=function(){showTab('bills')};li.appendChild(row);ul.appendChild(li)}
+    }
     ul.hidden=!ul.children.length;
-    var nxt=billsInWeek(addDays(ws,7)),ns=0;nxt.forEach(function(b){ns+=b.i.amount});
-    $('wkNext').textContent='Next week ('+md(addDays(ws,7))+' – '+md(addDays(ws,13))+'): '+(nxt.length?gbp.format(ns)+' in bills':'no bills due');
+    var nx=addDays(ws,7),nxt=billsInWeek(nx),ns=0;nxt.forEach(function(b){ns+=b.i.amount});
+    $('wkNext').hidden=past;
+    $('wkNext').textContent='The week after ('+md(nx)+' – '+md(addDays(nx,6))+'): '+(nxt.length?gbp.format(ns)+' in bills':'no bills due');
+    if(wkOff===0)$('wkNext').textContent=$('wkNext').textContent.replace('The week after','Next week');
 
-    // Spending: needs Monzo
-    $('wkSpentTile').hidden=$('wkChartBox').hidden=!on;
-    document.querySelector('.wk-tiles').classList.toggle('one',!on);
+    // Spending (needs Monzo; nothing to show for weeks ahead)
+    $('wkSpentTile').hidden=!on||future;$('wkChartBox').hidden=!on;
+    document.querySelector('.wk-tiles').classList.toggle('one',!on||future);
     if(!on)return;
-    var weeks=[];for(var w=7;w>=0;w--){var st=addDays(ws,-7*w);weeks.push({s:st,e:addDays(st,7),v:0})}
-    histTx.forEach(function(t){if(t.amount_pence>=0)return;var d=new Date(t.created_at);
-      weeks.forEach(function(wk){if(d>=wk.s&&d<wk.e)wk.v-=t.amount_pence})});
-    weeks.forEach(function(wk){wk.v/=100});
-    var cur=weeks[7].v,prev=weeks[6].v,dayN=(now.getDay()+6)%7+1;
+    var cur=spentIn(ws,addDays(ws,7)),prev=spentIn(addDays(ws,-7),ws);
+    $('wkSpentLbl').textContent=wkOff===0?'Spent so far':'Spent';
     $('wkSpent').textContent=gbp.format(cur);
-    $('wkVs').textContent=Math.abs(cur-prev)<0.5?'Same as last week':gbp0.format(Math.abs(cur-prev))+(cur>prev?' more':' less')+' than all of last week';
-    // Only show weeks since Monzo history began
-    var first=histTx.length?weekStart(new Date(histTx[0].created_at)):ws;
-    var shown=weeks.filter(function(wk){return wk.s>=first});
-    drawWeeks($('chartWk'),shown);
-    $('tableWk').innerHTML='<table><tr><th>Week starting</th><th>Spent</th></tr>'+shown.map(function(wk){return '<tr><td>'+fmtDay(wk.s)+' '+wk.s.toLocaleDateString('en-GB',{month:'short'})+'</td><td>'+gbp.format(wk.v)+'</td></tr>'}).join('')+'</table>';
+    $('wkVs').textContent=Math.abs(cur-prev)<0.5?'Same as the week before':gbp0.format(Math.abs(cur-prev))+(cur>prev?' more':' less')+' than the week before';
+    // Chart: 8 weeks ending this week, or ending at the chosen week if it's older than that
+    var endOff=Math.min(0,wkOff<-7?wkOff+3:0);
+    var floor=wkFloor(),weeks=[];
+    for(var o=endOff-7;o<=endOff;o++){if(o<floor)continue;var st=addDays(thisWs,7*o);weeks.push({o:o,s:st,v:spentIn(st,addDays(st,7))})}
+    drawWeeks($('chartWk'),weeks);
+    $('tableWk').innerHTML='<table><tr><th>Week starting</th><th>Spent</th></tr>'+weeks.map(function(wk){return '<tr><td>'+fmtDay(wk.s)+' '+wk.s.toLocaleDateString('en-GB',{month:'short'})+'</td><td>'+gbp.format(wk.v)+'</td></tr>'}).join('')+'</table>';
   }
   var closeWkTip=function(){};
+  // Weekly columns. Tap a column to show that week in the card above.
   function drawWeeks(wrap,weeks){
     wrap.textContent='';
     var W=Math.max(280,wrap.clientWidth||320),H=170,padL=40,padB=24,padT=22,ns='http://www.w3.org/2000/svg';
     var top=niceMax(Math.max.apply(null,weeks.map(function(w){return w.v}))),plotH=H-padB-padT,plotW=W-padL;
     function mk(tag,attrs){var e=document.createElementNS(ns,tag);for(var a in attrs)e.setAttribute(a,attrs[a]);return e}
-    var svg=mk('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',role:'img','aria-label':'Money spent each week for the last '+weeks.length+' weeks'});
+    var svg=mk('svg',{viewBox:'0 0 '+W+' '+H,width:'100%',role:'img','aria-label':'Money spent each week. Tap a week to see it.'});
     [0,.5,1].forEach(function(f){var y=padT+plotH-f*plotH;svg.appendChild(mk('line',{x1:padL,x2:W,y1:y,y2:y,class:'grid'}));
       var t=mk('text',{x:padL-8,y:y+4,'text-anchor':'end'});t.textContent=gbp0.format(top*f);svg.appendChild(t)});
     var slot=plotW/Math.max(weeks.length,4),bw=Math.min(24,slot-12),y0=padT+plotH,gold=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-    var hl=mk('rect',{class:'hl',x:0,y:padT-18,width:slot-4,height:plotH+18,rx:8,visibility:'hidden'});svg.appendChild(hl);
-    var tip=el('div','tip');tip.hidden=true;
     weeks.forEach(function(wk,i){
-      var cx=padL+slot*i+slot/2,h=wk.v/top*plotH,last=i===weeks.length-1;
+      var cx=padL+slot*i+slot/2,h=wk.v/top*plotH,sel=wk.o===wkOff;
+      if(sel)svg.appendChild(mk('rect',{class:'hl',x:padL+slot*i+2,y:padT-18,width:slot-4,height:plotH+18,rx:8}));
       if(h>0){var r=Math.min(4,h,bw/2),bx=cx-bw/2;
-        svg.appendChild(mk('path',{d:'M'+bx+','+y0+'V'+(y0-h+r)+'Q'+bx+','+(y0-h)+' '+(bx+r)+','+(y0-h)+'H'+(bx+bw-r)+'Q'+(bx+bw)+','+(y0-h)+' '+(bx+bw)+','+(y0-h+r)+'V'+y0+'Z',fill:gold,opacity:last?1:.55}))}
-      if(last){var v=mk('text',{x:cx,y:y0-h-6,'text-anchor':'middle',class:'cur'});v.textContent=gbp0.format(wk.v);svg.appendChild(v)}
-      var lab=mk('text',{x:cx,y:H-6,'text-anchor':'middle'});if(last)lab.setAttribute('class','cur');
-      lab.textContent=last?'Now':wk.s.getDate()+'/'+(wk.s.getMonth()+1);svg.appendChild(lab);
+        svg.appendChild(mk('path',{d:'M'+bx+','+y0+'V'+(y0-h+r)+'Q'+bx+','+(y0-h)+' '+(bx+r)+','+(y0-h)+'H'+(bx+bw-r)+'Q'+(bx+bw)+','+(y0-h)+' '+(bx+bw)+','+(y0-h+r)+'V'+y0+'Z',fill:gold,opacity:sel?1:.5}))}
+      if(sel){var v=mk('text',{x:cx,y:y0-h-6,'text-anchor':'middle',class:'cur'});v.textContent=gbp0.format(wk.v);svg.appendChild(v)}
+      var lab=mk('text',{x:cx,y:H-6,'text-anchor':'middle'});if(sel)lab.setAttribute('class','cur');
+      lab.textContent=wk.o===0?'Now':wk.s.getDate()+'/'+(wk.s.getMonth()+1);svg.appendChild(lab);
       var hit=mk('rect',{class:'hit',x:padL+slot*i,y:0,width:slot,height:H});
-      hit.addEventListener('click',function(e){
-        e.stopPropagation();
-        if(!tip.hidden&&tip.dataset.m==i){closeWkTip();return}
-        hl.setAttribute('x',padL+slot*i+2);hl.setAttribute('visibility','visible');
-        tip.dataset.m=i;tip.innerHTML='';tip.appendChild(el('b',null,'Week of '+fmtDay(wk.s)+' '+wk.s.toLocaleDateString('en-GB',{month:'short'})));
-        var row=el('div');row.append(el('span',null,last?'Spent so far':'Spent'),el('span','v',gbp.format(wk.v)));tip.appendChild(row);
-        tip.hidden=false;var px=(cx/W)*wrap.clientWidth,tw=tip.offsetWidth;
-        tip.style.left=Math.max(0,Math.min(wrap.clientWidth-tw,px-tw/2))+'px';tip.style.top='-8px';tip.style.transform='translateY(-100%)';
-        haptic();
-      });
+      hit.addEventListener('click',function(e){e.stopPropagation();setWeek(wk.o)});
       svg.appendChild(hit);
     });
-    wrap.appendChild(svg);wrap.appendChild(tip);
-    closeWkTip=function(){tip.hidden=true;hl.setAttribute('visibility','hidden')};
+    wrap.appendChild(svg);
   }
 
   function renderSpend(){
