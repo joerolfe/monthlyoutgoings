@@ -21,7 +21,7 @@
   /* Always dark, black and gold */
   --bg:#0b0a08; --surface:#18160f; --fg:#f4eee0; --muted:#a69d8a; --faint:#6e6757; --line:#2b271e;
   --accent:#d4af37; --accent-soft:#2f2814; --bad:#ff7a5c; --bad-soft:#3a1d14;
-  --bar:rgba(11,10,8,.85);
+  --bar:rgba(11,10,8,.85); --tile:#24201a;
   /* chart series: validated categorical slots 1-3 (fast food, Amazon, going out) */
   --s1:#338ced; --s2:#e76624; --s3:#00a888; --grid:#2b271e;
   --font:-apple-system,BlinkMacSystemFont,'SF Pro Text',system-ui,'Segoe UI',sans-serif;
@@ -97,10 +97,11 @@ li input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:s
 .row .amt s{display:block;font-size:12px;color:var(--faint)}
 .row .chev{flex:none;color:var(--faint)}
 /* logos */
-.logo{flex:none;width:36px;height:36px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:17px;font-weight:600;color:var(--muted);line-height:1}
+.logo{flex:none;width:36px;height:36px;border-radius:10px;background:var(--tile);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:17px;font-weight:600;color:var(--muted);line-height:1}
 .logo img{width:100%;height:100%;object-fit:cover;display:block}
-.logo.fav img{width:70%;height:70%;object-fit:contain}
-.logo.txt-l{background:var(--line);box-shadow:none}
+.logo.glyph img{width:56%;height:56%;object-fit:contain}
+.logo.fav img{width:70%;height:70%;object-fit:contain;filter:invert(1) hue-rotate(180deg)}
+.logo.full img{filter:brightness(.9)} .logo.fav.keep img{filter:none}
 .paid .logo{opacity:.55}
 .next .logo{width:40px;height:40px;border-radius:11px}
 .dots .logo{width:15px;height:15px;border-radius:4px;font-size:9px}
@@ -446,15 +447,24 @@ li:has(>.row:active) .row{background:none}
     ['maintenance','🔧'],['food','🛒'],['shop','🛒'],['groceries','🛒'],['insurance','🛡️'],['council','🏛️'],['electric','⚡'],['gas','🔥'],['water','💧'],['broadband','📶'],['internet','📶']];
   function brandOf(hay){hay=' '+hay.toLowerCase()+' ';for(var i=0;i<BRANDS.length;i++)if(hay.indexOf(BRANDS[i][0])>=0)return BRANDS[i][1];return null}
   function emojiOf(hay){hay=hay.toLowerCase();for(var i=0;i<EMOJI.length;i++)if(hay.indexOf(EMOJI[i][0])>=0)return EMOJI[i][1];return null}
-  function logoEl(name,hay,monzoLogo){
-    var box=el('span','logo'),domain=brandOf(hay);
+  var GLYPH={'apple.com':['apple','000000'],'soundcloud.com':['soundcloud','FF5500'],'claude.ai':['claude','D97757'],'monzo.com':['monzo','14233C'],'spotify.com':['spotify','1ED760'],'netflix.com':['netflix','E50914'],'youtube.com':['youtube','FF0000'],'google.com':['google','4285F4'],'playstation.com':['playstation','0070D1'],'steampowered.com':['steam','000000'],'paypal.com':['paypal','002991'],'tesco.com':['tesco','00539F'],'lidl.co.uk':['lidl','0050AA'],'asda.com':['asda','68A51C'],'morrisons.com':['morrisons','007531'],'coop.co.uk':['coop','00B1E7'],'mcdonalds.com':['mcdonalds','FBC817'],'kfc.co.uk':['kfc','F40027'],'burgerking.co.uk':['burgerking','D62300'],'tacobell.co.uk':['tacobell','38096C'],'deliveroo.co.uk':['deliveroo','00CCBC'],'just-eat.co.uk':['justeat','FF8000'],'ubereats.com':['ubereats','06C167'],'uber.com':['uber','000000'],'starbucks.co.uk':['starbucks','006241'],'shell.co.uk':['shell','FFD500'],'tfl.gov.uk':['transportforlondon','113B92'],'boots.com':['boots','05054B'],'ebay.co.uk':['ebay','E53238'],'ticketmaster.co.uk':['ticketmaster','026CDF'],'aldi.co.uk':['aldinord','2490D7']};
+  var KEEP_FAV={'nowtv.com':1};   // icons that are already dark: don't flip
+  // Brand colour if it shows up on the dark tile, otherwise cream.
+  function onDark(hex){var c=[0,2,4].map(function(k){var v=parseInt(hex.substr(k,2),16)/255;return v<=0.03928?v/12.92:Math.pow((v+0.055)/1.055,2.4)});
+    return (0.2126*c[0]+0.7152*c[1]+0.0722*c[2]+0.05)/0.0628>=3?hex:'f4eee0'}
+  function logoEl(name,hay,monzoLogo,preferMonzo){
+    var box=el('span','logo'),domain=brandOf(hay),g=domain&&GLYPH[domain];
+    box.setAttribute('aria-hidden','true');
     function fallback(){box.textContent='';box.className='logo txt-l';box.textContent=emojiOf(hay)||(name.trim().charAt(0)||'?').toUpperCase()}
-    var src=monzoLogo||(domain&&'https://www.google.com/s2/favicons?sz=128&domain='+domain);
+    var src,cls;
+    if(g&&!(preferMonzo&&monzoLogo)){src='https://cdn.simpleicons.org/'+g[0]+'/'+onDark(g[1]);cls='glyph'}   // vector logo drawn for dark
+    else if(monzoLogo){src=monzoLogo;cls='full'}
+    else if(domain){src='https://www.google.com/s2/favicons?sz=128&domain='+domain;cls=KEEP_FAV[domain]?'fav keep':'fav'}        // colour-flipped so white goes dark
     if(!src){fallback();return box}
-    if(!monzoLogo)box.classList.add('fav');
+    box.className+=' '+cls;
     var img=el('img');img.alt='';img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';
-    img.onerror=fallback;img.onload=function(){if(img.naturalWidth<20)fallback()};   // tiny default globe = no real icon
-    img.src=src;box.appendChild(img);box.setAttribute('aria-hidden','true');return box;
+    img.onerror=fallback;img.onload=function(){if(cls==='fav'&&img.naturalWidth<20)fallback()};   // tiny default globe = no real icon
+    img.src=src;box.appendChild(img);return box;
   }
   function billLogo(i){
     var hay=i.name+' '+(i.match||'');
