@@ -106,6 +106,16 @@ li input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:s
 .row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:16px}
 .row .amt s{display:block;font-size:12px;color:var(--faint)}
 .row .chev{flex:none;color:var(--faint)}
+/* logos */
+.logo{flex:none;width:36px;height:36px;border-radius:10px;background:#fff;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:17px;font-weight:600;color:var(--muted);line-height:1}
+.logo img{width:100%;height:100%;object-fit:cover;display:block}
+.logo.fav img{width:70%;height:70%;object-fit:contain}
+.logo.txt-l{background:var(--line);box-shadow:none}
+.paid .logo{opacity:.55}
+.next .logo{width:40px;height:40px;border-radius:11px}
+.dots .logo{width:15px;height:15px;border-radius:4px;font-size:9px}
+.dots .logo.paid{opacity:.45} .dots .logo.late{box-shadow:0 0 0 1.5px var(--bad)}
+.dots{align-items:center}
 /* swipe-left actions on bills */
 li.sw{padding-left:0;overflow:hidden}
 li.sw::before{z-index:2}
@@ -136,11 +146,11 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px;text-align:center}
 .cal .wd{font-size:12px;color:var(--faint);font-weight:600;padding-bottom:6px}
 .cal button{aspect-ratio:1/1.1;border:0;background:none;border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:6px;gap:4px;cursor:pointer;font-size:16px;font-variant-numeric:tabular-nums}
-.cal button span:first-child{width:28px;height:28px;display:grid;place-content:center;border-radius:50%}
-.cal button.today span:first-child{background:var(--accent);color:#fff;font-weight:600}
-.cal button.sel:not(.today) span:first-child{background:var(--fg);color:var(--bg);font-weight:600}
+.cal button>span:first-child{width:28px;height:28px;display:grid;place-content:center;border-radius:50%}
+.cal button.today>span:first-child{background:var(--accent);color:#fff;font-weight:600}
+.cal button.sel:not(.today)>span:first-child{background:var(--fg);color:var(--bg);font-weight:600}
 .cal button.past:not(.today):not(.sel){color:var(--faint)}
-.dots{display:flex;gap:3px;justify-content:center;height:6px}
+.dots{display:flex;gap:3px;justify-content:center;height:15px}
 .dots i{width:5px;height:5px;border-radius:50%;background:var(--faint)}
 .dots i.paid{background:var(--accent)} .dots i.late{background:var(--bad)} .dots i.tx{background:transparent;box-shadow:inset 0 0 0 1.5px var(--faint)}
 .legend{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
@@ -182,7 +192,8 @@ td:first-child{font-family:var(--font)}
 .catrow{display:flex;justify-content:space-between;padding:9px 0;border-top:.5px solid var(--line);font-size:15px}
 .catrow .num{font-size:15px}
 .place .bdot{width:10px;height:10px;border-radius:3px;flex:none}
-#places li+li::before{left:40px}
+#places li+li::before{left:66px}
+li.sw+li.sw::before,li+li.sw::before{left:102px} li+li.plain-li::before,#linkList li+li::before{left:62px}
 
 /* Tab bar */
 .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:6;display:flex;justify-content:center;
@@ -431,6 +442,42 @@ li:has(>.row:active) .row{background:none}
     return null;
   }
 
+  /* Logos: Monzo's merchant logo when there is one, else a known brand's icon, else an emoji or letter. */
+  var BRANDS=[['prime video','primevideo.com'],['amazon','amazon.co.uk'],['amzn','amazon.co.uk'],['apple','apple.com'],['soundcloud','soundcloud.com'],
+    ['claude','claude.ai'],['anthropic','claude.ai'],['now tv','nowtv.com'],['nowtv','nowtv.com'],['aldi','aldi.co.uk'],['admiral','admiral.com'],['car insurance','admiral.com'],
+    ['id mobile','idmobile.co.uk'],['phone','idmobile.co.uk'],['monzo','monzo.com'],['spotify','spotify.com'],['netflix','netflix.com'],['disney','disneyplus.com'],
+    ['youtube','youtube.com'],['google','google.com'],['playstation','playstation.com'],['xbox','xbox.com'],['steam','steampowered.com'],['paypal','paypal.com'],
+    ['tesco','tesco.com'],['sainsbury','sainsburys.co.uk'],['lidl','lidl.co.uk'],['asda','asda.com'],['morrisons','morrisons.com'],['co-op','coop.co.uk'],['m&s','marksandspencer.com'],
+    ['mcdonald','mcdonalds.com'],['kfc','kfc.co.uk'],['burger king','burgerking.co.uk'],['greggs','greggs.co.uk'],['subway','subway.com'],['domino','dominos.co.uk'],
+    ['papa john','papajohns.co.uk'],['pizza hut','pizzahut.co.uk'],['nando','nandos.co.uk'],['five guys','fiveguys.co.uk'],['taco bell','tacobell.co.uk'],['wingstop','wingstop.co.uk'],
+    ['popeyes','popeyesuk.com'],['german doner','germandonerkebab.com'],['deliveroo','deliveroo.co.uk'],['just eat','just-eat.co.uk'],['uber eats','ubereats.com'],['ubereats','ubereats.com'],['uber','uber.com'],
+    ['costa','costa.co.uk'],['starbucks','starbucks.co.uk'],['pret','pret.co.uk'],['wetherspoon','jdwetherspoon.com'],['brewdog','brewdog.com'],['odeon','odeon.co.uk'],['cineworld','cineworld.co.uk'],
+    ['vue ','myvue.com'],['everyman','everymancinema.com'],['ticketmaster','ticketmaster.co.uk'],['skiddle','skiddle.com'],['dice.fm','dice.fm'],['eventbrite','eventbrite.co.uk'],
+    ['shell','shell.co.uk'],['esso','esso.co.uk'],['texaco','texaco.co.uk'],['tfl','tfl.gov.uk'],['trainline','thetrainline.com'],['boots','boots.com'],['superdrug','superdrug.com'],['primark','primark.com'],['ebay','ebay.co.uk']];
+  var EMOJI=[['fuel','⛽'],['petrol','⛽'],['diesel','⛽'],['hair','✂️'],['barber','✂️'],['rent','🏠'],['gym','💪'],['toiletr','🧴'],['pot','🐷'],['saving','🐷'],
+    ['maintenance','🔧'],['food','🛒'],['shop','🛒'],['groceries','🛒'],['insurance','🛡️'],['council','🏛️'],['electric','⚡'],['gas','🔥'],['water','💧'],['broadband','📶'],['internet','📶']];
+  function brandOf(hay){hay=' '+hay.toLowerCase()+' ';for(var i=0;i<BRANDS.length;i++)if(hay.indexOf(BRANDS[i][0])>=0)return BRANDS[i][1];return null}
+  function emojiOf(hay){hay=hay.toLowerCase();for(var i=0;i<EMOJI.length;i++)if(hay.indexOf(EMOJI[i][0])>=0)return EMOJI[i][1];return null}
+  function logoEl(name,hay,monzoLogo){
+    var box=el('span','logo'),domain=brandOf(hay);
+    function fallback(){box.textContent='';box.className='logo txt-l';box.textContent=emojiOf(hay)||(name.trim().charAt(0)||'?').toUpperCase()}
+    var src=monzoLogo||(domain&&'https://www.google.com/s2/favicons?sz=128&domain='+domain);
+    if(!src){fallback();return box}
+    if(!monzoLogo)box.classList.add('fav');
+    var img=el('img');img.alt='';img.loading='lazy';img.decoding='async';img.referrerPolicy='no-referrer';
+    img.onerror=fallback;img.onload=function(){if(img.naturalWidth<20)fallback()};   // tiny default globe = no real icon
+    img.src=src;box.appendChild(img);box.setAttribute('aria-hidden','true');return box;
+  }
+  function billLogo(i){
+    var hay=i.name+' '+(i.match||'');
+    if(brandOf(hay))return logoEl(i.name,hay);
+    // No known brand: borrow the Monzo logo from the payment that paid it, or any past payment it matches.
+    var ws=words(i),t=(histTx||[]).find(function(t){return t.id===i.txId&&t.logo})||(ws.length?(histTx||[]).slice().reverse().find(function(t){
+      if(!t.logo||t.amount_pence>=0)return false;var h=((t.merchant_name||'')+' '+(t.description||'')).toLowerCase();return ws.some(function(w){return h.indexOf(w)>=0})}):null);
+    return logoEl(i.name,hay+' '+i.cat,t&&t.logo);
+  }
+  function txLogo(t){return logoEl(txName(t),(t.merchant_name||'')+' '+(t.description||'')+' '+(t.category||''),t.logo)}
+
   /* ---------- local storage ---------- */
   function store(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}
   function read(k){try{return localStorage.getItem(k)}catch(e){return null}}
@@ -551,7 +598,7 @@ li:has(>.row:active) .row{background:none}
   function loadMonzo(){
     if(!user||!sb){monzoTx=[];histTx=[];render();return}
     var d=new Date(),monthStart=new Date(d.getFullYear(),d.getMonth(),1),histStart=new Date(d.getFullYear(),d.getMonth()-5,1);
-    sb.from('monzo_transactions').select('id,amount_pence,category,merchant_name,description,created_at,merchant_id:raw->merchant->>id')
+    sb.from('monzo_transactions').select('id,amount_pence,category,merchant_name,description,created_at,merchant_id:raw->merchant->>id,logo:raw->merchant->>logo')
       .gte('created_at',histStart.toISOString()).order('created_at',{ascending:true}).then(function(r){
         if(r.error){monzoTx=null;histTx=[];render();return}
         histTx=r.data;
@@ -653,7 +700,7 @@ li:has(>.row:active) .row{background:none}
     txt.appendChild(el('span','name',it.name));if(m)txt.appendChild(el('span','meta '+m.c,m.t));
     var amt=el('span','amt',gbp.format(it.paid?paidValue(it):it.amount));
     if(it.paid&&it.paidAmount!=null&&Math.abs(it.paidAmount-it.amount)>=0.01)amt.appendChild(el('s',null,gbp.format(it.amount)));
-    row.append(txt,amt);row.insertAdjacentHTML('beforeend',CHEV);
+    row.append(billLogo(it),txt,amt);row.insertAdjacentHTML('beforeend',CHEV);
     row.onclick=function(){if(openSwipe){closeSwipe();return}openEdit(it)};
     // Swipe left to reveal Edit / Delete
     li.classList.add('sw');
@@ -667,7 +714,7 @@ li:has(>.row:active) .row{background:none}
   function txRow(t,meta,onclick,extra){
     var li=el('li','plain-li'),row=el('button','row');row.type='button';
     var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta'+(extra||''),meta));
-    row.append(txt,el('span','amt',gbp.format(Math.abs(t.amount_pence)/100)));row.insertAdjacentHTML('beforeend',CHEV);
+    row.append(txLogo(t),txt,el('span','amt',gbp.format(Math.abs(t.amount_pence)/100)));row.insertAdjacentHTML('beforeend',CHEV);
     row.onclick=onclick;li.appendChild(row);return li;
   }
 
@@ -688,7 +735,7 @@ li:has(>.row:active) .row{background:none}
     var nx=$('next');nx.textContent='';
     if(soon.length||late.length){
       var txt=el('div','txt');
-      if(soon.length){var s=soon[0];txt.append(el('span',null,dueDay(s)===today?'Due today':'Next up · '+dayLabel(dueDay(s))),el('b',null,s.name+' · '+gbp.format(s.amount)))}
+      if(soon.length){var s=soon[0];nx.appendChild(billLogo(s));txt.append(el('span',null,dueDay(s)===today?'Due today':'Next up · '+dayLabel(dueDay(s))),el('b',null,s.name+' · '+gbp.format(s.amount)))}
       else{txt.append(el('span',null,'Nothing else due this month'))}
       nx.appendChild(txt);
       if(late.length)nx.appendChild(el('span','pill',late.length+' overdue'));
@@ -726,8 +773,9 @@ li:has(>.row:active) .row{background:none}
       if(d===today)b.classList.add('today');if(d<today)b.classList.add('past');if(d===selDay)b.classList.add('sel');
       b.appendChild(el('span',null,d));
       var dots=el('span','dots');
-      bills.slice(0,3).forEach(function(i){dots.appendChild(el('i',i.paid?'paid':(d<today?'late':'')))});
-      if(txByDay[d]&&bills.length<3)dots.appendChild(el('i','tx'));
+      bills.slice(0,2).forEach(function(i){var lg=billLogo(i);if(i.paid)lg.classList.add('paid');else if(d<today)lg.classList.add('late');dots.appendChild(lg)});
+      if(bills.length>2)dots.appendChild(el('i',bills.some(function(i){return !i.paid&&d<today})?'late':''));
+      else if(txByDay[d]&&!bills.length)dots.appendChild(el('i','tx'));
       b.appendChild(dots);
       b.setAttribute('aria-label',dayLabel(d)+': '+(bills.length?bills.map(function(i){return i.name}).join(', '):'nothing due'));
       b.onclick=function(){selDay=d;haptic();renderCal()};
@@ -800,11 +848,11 @@ li:has(>.row:active) .row{background:none}
     $('table6').innerHTML=tb;
 
     // Top places in the three groups this month
-    var places={};monzoTx.forEach(function(t){var b=bucketOf(t);if(!b||t.amount_pence>=0)return;var n=txName(t);places[n]=places[n]||{n:n,b:b,v:0,c:0};places[n].v-=t.amount_pence;places[n].c++});
+    var places={};monzoTx.forEach(function(t){var b=bucketOf(t);if(!b||t.amount_pence>=0)return;var n=txName(t);places[n]=places[n]||{n:n,b:b,v:0,c:0,t:t};places[n].v-=t.amount_pence;places[n].c++});
     var top=Object.keys(places).map(function(k){return places[k]}).sort(function(a,b){return b.v-a.v}).slice(0,6);
     var pl=$('places');pl.textContent='';$('placesHead').hidden=pl.hidden=!top.length;
     top.forEach(function(p){
-      var li=el('li','place'),bd=el('i','bdot');bd.style.background=BUCKETS.find(function(b){return b.key===p.b}).color;
+      var li=el('li','place'),bd=p.t?txLogo(p.t):el('i','bdot');
       var row=el('div','row');row.style.cursor='default';
       var txt=el('span','txt');txt.append(el('span','name',p.n),el('span','meta',BUCKETS.find(function(b){return b.key===p.b}).label+' · '+p.c+(p.c===1?' visit':' visits')));
       row.append(txt,el('span','amt',gbp.format(p.v/100)));li.append(bd,row);pl.appendChild(li);
@@ -993,7 +1041,7 @@ li:has(>.row:active) .row{background:none}
     bills.forEach(function(it){
       var li=el('li'),row=el('button','row');row.type='button';row.style.paddingLeft='0';
       var txt=el('span','txt');txt.append(el('span','name',it.name),el('span','meta',it.cat+(it.paid?' · already ticked':'')));
-      row.append(txt,el('span','amt',gbp.format(it.amount)));
+      row.append(billLogo(it),txt,el('span','amt',gbp.format(it.amount)));
       row.onclick=function(){
         var w=(t.merchant_name||t.description||'').trim().toLowerCase();
         if(w&&words(it).indexOf(w)<0)it.match=words(it).concat([w]).join(', ');
