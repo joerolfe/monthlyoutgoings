@@ -37,7 +37,7 @@ Monzo sends every new transaction to `/api/monzo-webhook`, a Vercel function tha
 
 **What gets saved:** card payments, Direct Debits, payments to and from people, and salary.
 **What's skipped:** pot transfers, top-ups, declined payments and zero-amount card checks.
-**How refunds count:** a refund from a merchant reduces that category's spending instead of counting as income.
+**How money in counts:** everything that comes in, including refunds, counts as income. Spending totals only count money going out.
 
 ### 1. Database
 Create your account in the app first, then run `supabase/monzo.sql` in the SQL Editor. It gives read access to that first account automatically.

@@ -96,6 +96,7 @@ li input[type=checkbox]:checked::after{content:"";width:6px;height:11px;border:s
 .row .amt{flex:none;font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;font-size:16px}
 .row .amt s{display:block;font-size:12px;color:var(--faint)}
 .row .chev{flex:none;color:var(--faint)}
+.row .amt.in{color:var(--accent)}
 /* logos */
 .logo{flex:none;width:36px;height:36px;border-radius:10px;background:var(--tile);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.07);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:17px;font-weight:600;color:var(--muted);line-height:1}
 .logo img{width:100%;height:100%;object-fit:cover;display:block}
@@ -339,6 +340,9 @@ li:has(>.row:active) .row{background:none}
         <div class="tile"><span class="label">Out this month</span><b class="num" id="mOut">£0</b></div>
         <div class="tile"><span class="label">In this month</span><b class="num" id="mIn">£0</b></div>
       </div>
+
+      <div class="section-head" id="inHead"><h2 class="section-title">Money in</h2><span>this month</span></div>
+      <ul class="plain" id="moneyIn"></ul>
 
       <section class="card">
         <h2 class="section-title">This month</h2>
@@ -831,7 +835,7 @@ li:has(>.row:active) .row{background:none}
     var s={ff:0,amz:0,out:0};
     txs.forEach(function(t){
       var b=bucketOf(t);if(!b)return;
-      if(t.amount_pence<0)s[b]-=t.amount_pence;else if(t.merchant_id)s[b]-=t.amount_pence;  // merchant refunds reduce the group
+      if(t.amount_pence<0)s[b]-=t.amount_pence;   // money out only; refunds show under Money in
     });
     Object.keys(s).forEach(function(k){s[k]=Math.max(0,s[k])/100});return s;
   }
@@ -972,11 +976,18 @@ li:has(>.row:active) .row{background:none}
     var out=0,inc=0,cats={};
     monzoTx.forEach(function(t){
       var p=t.amount_pence;
-      if(p>0&&!t.merchant_id){inc+=p;return}
+      if(p>0){inc+=p;return}   // all money in is income, refunds included
       var c=(t.category||'other').replace(/_/g,' ');c=c.charAt(0).toUpperCase()+c.slice(1);
       cats[c]=(cats[c]||0)-p;out-=p;
     });
     $('mOut').textContent=gbp0.format(out/100);$('mIn').textContent=gbp0.format(inc/100);
+    var ins=monzoTx.filter(function(t){return t.amount_pence>0}).reverse(),mi=$('moneyIn');mi.textContent='';
+    $('inHead').hidden=mi.hidden=!ins.length;
+    ins.forEach(function(t){
+      var li=el('li','plain-li'),row=el('div','row');row.style.cursor='default';
+      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta',shortDate(t.created_at)+(t.merchant_id?' · refund':'')));
+      row.append(txLogo(t),txt,el('span','amt in','+'+gbp.format(t.amount_pence/100)));li.appendChild(row);mi.appendChild(li);
+    });
 
     // This month per group, with change vs last month
     var thisM=sumBuckets(monzoTx);
