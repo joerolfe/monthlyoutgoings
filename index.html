@@ -338,7 +338,7 @@ li:has(>.row:active) .row{background:none}
     <div id="spendOn" style="display:contents">
       <div class="tiles">
         <div class="tile"><span class="label">Out this month</span><b class="num" id="mOut">£0</b></div>
-        <div class="tile"><span class="label">In this month</span><b class="num" id="mIn">£0</b></div>
+        <div class="tile"><span class="label">In this month</span><b class="num" id="mIn">£0</b><span class="sub-sm" id="mWages" hidden></span></div>
       </div>
 
       <div class="section-head" id="inHead"><h2 class="section-title">Money in</h2><span>this month</span></div>
@@ -477,7 +477,7 @@ li:has(>.row:active) .row{background:none}
     ['popeyes','popeyesuk.com'],['german doner','germandonerkebab.com'],['deliveroo','deliveroo.co.uk'],['just eat','just-eat.co.uk'],['uber eats','ubereats.com'],['ubereats','ubereats.com'],['uber','uber.com'],
     ['costa','costa.co.uk'],['starbucks','starbucks.co.uk'],['pret','pret.co.uk'],['wetherspoon','jdwetherspoon.com'],['brewdog','brewdog.com'],['odeon','odeon.co.uk'],['cineworld','cineworld.co.uk'],
     ['vue ','myvue.com'],['everyman','everymancinema.com'],['ticketmaster','ticketmaster.co.uk'],['skiddle','skiddle.com'],['dice.fm','dice.fm'],['eventbrite','eventbrite.co.uk'],
-    ['shell','shell.co.uk'],['esso','esso.co.uk'],['texaco','texaco.co.uk'],['tfl','tfl.gov.uk'],['trainline','thetrainline.com'],['boots','boots.com'],['superdrug','superdrug.com'],['primark','primark.com'],['ebay','ebay.co.uk']];
+    ['shell','shell.co.uk'],['esso','esso.co.uk'],['texaco','texaco.co.uk'],['tfl','tfl.gov.uk'],['trainline','thetrainline.com'],['boots','boots.com'],['superdrug','superdrug.com'],['primark','primark.com'],['b&q','diy.com'],['b & q','diy.com'],['b and q','diy.com'],['ebay','ebay.co.uk']];
   var EMOJI=[['fuel','⛽'],['petrol','⛽'],['diesel','⛽'],['hair','✂️'],['barber','✂️'],['rent','🏠'],['gym','💪'],['toiletr','🧴'],['maintenance','🚗'],['pot','🐷'],['saving','🐷'],
     ['food','🛒'],['shop','🛒'],['groceries','🛒'],['insurance','🛡️'],['council','🏛️'],['electric','⚡'],['gas','🔥'],['water','💧'],['broadband','📶'],['internet','📶']];
   function brandOf(hay){hay=' '+hay.toLowerCase()+' ';for(var i=0;i<BRANDS.length;i++)if(hay.indexOf(BRANDS[i][0])>=0)return BRANDS[i][1];return null}
@@ -626,6 +626,8 @@ li:has(>.row:active) .row{background:none}
 
   /* ---------- Monzo: load 6 months, auto-tick this month's bills ---------- */
   var monzoTx=[], histTx=[];  // monzoTx = this month only; null = table unavailable
+  // A big payment in from B&Q is wages (small ones are refunds from the shop).
+  function isWages(t){return t.amount_pence>=10000&&/\bb\s*(&|and)\s*q\b/i.test((t.merchant_name||'')+' '+(t.description||''))}
   function txName(t){return t.merchant_name||t.description||'Monzo payment'}
   function words(item){return (item.match||'').split(',').map(function(w){return w.trim().toLowerCase()}).filter(Boolean)}
   function loadMonzo(){
@@ -981,11 +983,13 @@ li:has(>.row:active) .row{background:none}
       cats[c]=(cats[c]||0)-p;out-=p;
     });
     $('mOut').textContent=gbp0.format(out/100);$('mIn').textContent=gbp0.format(inc/100);
+    var wages=0;monzoTx.forEach(function(t){if(isWages(t))wages+=t.amount_pence});
+    $('mWages').hidden=!wages;$('mWages').textContent=gbp0.format(wages/100)+' wages';
     var ins=monzoTx.filter(function(t){return t.amount_pence>0}).reverse(),mi=$('moneyIn');mi.textContent='';
     $('inHead').hidden=mi.hidden=!ins.length;
     ins.forEach(function(t){
       var li=el('li','plain-li'),row=el('div','row');row.style.cursor='default';
-      var txt=el('span','txt');txt.append(el('span','name',txName(t)),el('span','meta',shortDate(t.created_at)+(t.merchant_id?' · refund':'')));
+      var w=isWages(t),txt=el('span','txt');txt.append(el('span','name',w?'Wages':txName(t)),el('span','meta',(w?txName(t)+' · ':'')+shortDate(t.created_at)+(!w&&t.merchant_id?' · refund':'')));
       row.append(txLogo(t),txt,el('span','amt in','+'+gbp.format(t.amount_pence/100)));li.appendChild(row);mi.appendChild(li);
     });
 
